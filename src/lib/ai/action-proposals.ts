@@ -67,13 +67,13 @@ export function extractAIActionProposal(content: string): {
 } {
   const occurrences = content.split(OPEN).length - 1;
   if (occurrences === 0) return { cleanContent: content.trim() };
-  if (occurrences > 1) return { cleanContent: content.replace(/\\[\\[SAMZY_ACTION_PROPOSAL\\]\\][\\s\\S]*?(?:\\[\\[\\/SAMZY_ACTION_PROPOSAL\\]\\]|$)/g, "").trim(), warning: "The AI returned multiple action proposals. None were submitted." };
+  if (occurrences > 1) return { cleanContent: content.replace(/\[\[SAMZY_ACTION_PROPOSAL\]\][\s\S]*?(?:\[\[\/SAMZY_ACTION_PROPOSAL\]\]|$)/g, "").trim(), warning: "The AI returned multiple action proposals. None were submitted." };
   const start = content.indexOf(OPEN);
   const end = content.indexOf(CLOSE, start + OPEN.length);
   if (end < 0) {
     return { cleanContent: content.slice(0, start).trim(), warning: "The AI action proposal was incomplete and was not submitted." };
   }
-  const raw = content.slice(start + OPEN.length, end).trim().replace(/^```(?:json)?\\s*/i, "").replace(/\\s*```$/, "");
+  const raw = content.slice(start + OPEN.length, end).trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const cleanContent = (content.slice(0, start) + content.slice(end + CLOSE.length)).trim();
   try {
     const parsed = proposalSchema.safeParse(JSON.parse(raw));
