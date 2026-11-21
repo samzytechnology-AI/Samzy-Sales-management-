@@ -28,7 +28,11 @@ const starters = [
 
 export default function Home() {
   const [active,setActive] = useState("Overview");
-  const [health,setHealth] = useState<Health|null>(null);\n  const [workspace,setWorkspace] = useState<WorkspaceData|null>(null);\n  const [workspaceBusy,setWorkspaceBusy] = useState(false);\n  const [workspaceError,setWorkspaceError] = useState("");\n  const [saveBusy,setSaveBusy] = useState(false);
+  const [health,setHealth] = useState<Health|null>(null);
+  const [workspace,setWorkspace] = useState<WorkspaceData|null>(null);
+  const [workspaceBusy,setWorkspaceBusy] = useState(false);
+  const [workspaceError,setWorkspaceError] = useState("");
+  const [saveBusy,setSaveBusy] = useState(false);
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [orgId,setOrgId] = useState("");
