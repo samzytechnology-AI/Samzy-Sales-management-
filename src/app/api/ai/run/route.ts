@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     if (memoryError) throw new Error("Could not load approved company memory.");
 
     // Give the AI General Manager a fresh, read-only snapshot of the real company workspace.
-    const [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult, contactCoverageResult] = await Promise.all([
+    const [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult, contactCoverageResult, prospectTotal, clientTotal, projectTotal, approvalTotal, outreachTotal] = await Promise.all([
       supabase.from("prospects").select("id,company_name,website_url,industry,country,fit_score,status,research_summary,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
       supabase.from("clients").select("id,company_name,industry,status,source_prospect_id,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
       supabase.from("projects").select("id,project_name,status,quoted_amount_ngn,approved_amount_ngn,due_at,client_id,prospect_id,product_id,updated_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
@@ -93,8 +93,13 @@ export async function POST(request: NextRequest) {
       supabase.from("ai_runs").select("id,objective,task_type,status,created_at,synthesis").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(5),
       supabase.from("audit_events").select("action,entity_type,entity_id,metadata,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(10),
       supabase.from("contact_points").select("channel,is_verified").eq("organization_id", organizationId).limit(300),
+      supabase.from("prospects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
+            supabase.from("clients").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
+            supabase.from("projects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
+            supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
+            supabase.from("outreach_events").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
     ]);
-    const snapshotResults = [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult, contactCoverageResult];
+    const snapshotResults = [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult, contactCoverageResult, prospectTotal, clientTotal, projectTotal, approvalTotal, outreachTotal];
     if (snapshotResults.some(result => result.error)) {
       throw new Error("Could not load the complete company operating snapshot. Check the latest database migrations and workspace permissions.");
     }
@@ -103,6 +108,13 @@ export async function POST(request: NextRequest) {
     const companySnapshot = {
       capturedAt: new Date().toISOString(),
       dataScope: "Records read from this organisation's Business Command Centre database. Database presence confirms the record is stored, not that its claims were independently verified. Empty arrays mean no records were found; they do not imply activity outside this system.",
+      recordTotals: {
+        prospects: prospectTotal.count ?? 0,
+        clients: clientTotal.count ?? 0,
+        projects: projectTotal.count ?? 0,
+        approvals: approvalTotal.count ?? 0,
+        outreachEvents: outreachTotal.count ?? 0,
+      },
       loadedRecordCounts: {
         recentProspects: prospectsResult.data?.length ?? 0,
         recentClients: clientsResult.data?.length ?? 0,
