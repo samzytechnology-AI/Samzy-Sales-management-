@@ -82,6 +82,42 @@ export async function POST(request: NextRequest) {
       .limit(30);
     if (memoryError) throw new Error("Could not load approved company memory.");
 
+    // Give the AI General Manager a fresh, read-only snapshot of the real company workspace.
+    const [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult] = await Promise.all([
+      supabase.from("prospects").select("id,company_name,website_url,industry,country,fit_score,status,research_summary,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(25),
+      supabase.from("clients").select("id,company_name,primary_contact_name,email,phone,industry,status,source_prospect_id,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(25),
+      supabase.from("projects").select("id,project_name,status,quoted_amount_ngn,approved_amount_ngn,due_at,client_id,prospect_id,product_id,updated_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(25),
+      supabase.from("approval_requests").select("id,title,category,status,created_at,decided_at,decision_note").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(20),
+      supabase.from("outreach_events").select("id,prospect_id,channel,recipient,direction,status,body,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(30),
+      supabase.rpc("get_financial_summary", { p_organization_id: organizationId }),
+      supabase.from("ai_runs").select("id,objective,task_type,status,created_at,synthesis").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(10),
+      supabase.from("audit_events").select("action,entity_type,entity_id,metadata,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(20),
+    ]);
+    const snapshotResults = [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult];
+    if (snapshotResults.some(result => result.error)) {
+      throw new Error("Could not load the complete company operating snapshot. Check the latest database migrations and workspace permissions.");
+    }
+    const financialTotals = Array.isArray(financeResult.data) ? financeResult.data[0] : null;
+    const companySnapshot = {
+      capturedAt: new Date().toISOString(),
+      dataScope: "Verified records read from this organisation's Business Command Centre database. Empty arrays mean no records were found; they do not imply activity outside this system.",
+      counts: {
+        prospects: prospectsResult.data?.length ?? 0,
+        clients: clientsResult.data?.length ?? 0,
+        projects: projectsResult.data?.length ?? 0,
+        pendingApprovals: approvalsResult.data?.filter(item => item.status === "pending").length ?? 0,
+        recentOutreachEvents: outreachResult.data?.length ?? 0,
+      },
+      prospects: prospectsResult.data ?? [],
+      clients: clientsResult.data ?? [],
+      projects: projectsResult.data ?? [],
+      approvals: approvalsResult.data ?? [],
+      recentOutreach: (outreachResult.data ?? []).map(item => ({ ...item, body: item.body?.slice(0, 1200) ?? null })),
+      finance: financialTotals ?? { income_ngn: 0, expenses_ngn: 0, net_ngn: 0, transaction_count: 0 },
+      recentAiRuns: (runsResult.data ?? []).map(item => ({ ...item, synthesis: item.synthesis?.slice(0, 1800) ?? null })),
+      recentAuditEvents: auditResult.data ?? [],
+    };
+
     let conversationId = body.conversationId;
     if (conversationId) {
       const { data: conversation, error: conversationError } = await supabase
@@ -131,6 +167,7 @@ export async function POST(request: NextRequest) {
         ...body.context,
         conversationHistory: (history ?? []).reverse(),
         approvedCompanyMemory: memory ?? [],
+        verifiedCompanySnapshot: companySnapshot,
       },
     });
 
