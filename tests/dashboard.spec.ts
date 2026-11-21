@@ -214,7 +214,7 @@ test("authenticated dashboard can submit and decide an approval request", async 
   await page.locator("nav").getByRole("button", { name: /Approvals/ }).click();
   await page.getByPlaceholder("Approval title").fill("Approve test outreach");
   await page.getByPlaceholder("What needs approval and why?").fill("Approve the reviewed sample outreach message.");
-  const approvalForm = page.locator(".record-form").last();
+  const approvalForm = page.locator('.record-form:has(textarea[name="description"])');
   expect(await approvalForm.evaluate((form: HTMLFormElement) => form.checkValidity())).toBe(true);
   await page.getByRole("button", { name: "Submit for approval" }).click();
   await expect.poll(() => records.approvals.length).toBe(1);
