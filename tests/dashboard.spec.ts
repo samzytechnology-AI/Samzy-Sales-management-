@@ -81,6 +81,12 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: client }) });
         return;
       }
+      if (input.type === "contact_point_verify") {
+        const contact = records.contactPoints.find(x => x.id === input.id);
+        if (contact && contact.consent_basis) contact.is_verified = true;
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: contact ?? input }) });
+        return;
+      }
       const key = input.type === "approval" ? "approvals" : input.type === "prospect" ? "prospects" : input.type === "project" ? "projects" : input.type === "task" ? "tasks" : "clients";
       const item = records[key].find(x => x.id === input.id);
       if (item) item.status = input.type === "approval" ? input.decision : input.status;
@@ -311,6 +317,10 @@ test("CRM stores prospect contact points as unverified until verification occurs
   await expect.poll(() => records.contactPoints.length).toBe(1);
   expect(records.contactPoints[0].address).toBe("sales@example.com");
   await expect(row.locator(".contact-points")).toContainText("Unverified");
+  await row.getByPlaceholder("How was this contact verified?").fill("Manually checked against the business contact page.");
+  await row.getByRole("button", { name: "Confirm verification" }).click();
+  await expect.poll(() => records.contactPoints[0].is_verified).toBe(true);
+  await expect(row.locator(".contact-points")).toContainText("Manually verified");
 });
 
 test("AI General Manager restores shared company history with team attribution", async ({ page }) => {
