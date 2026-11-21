@@ -32,7 +32,8 @@ export default function Home() {
   const [workspace,setWorkspace] = useState<WorkspaceData|null>(null);
   const [workspaceBusy,setWorkspaceBusy] = useState(false);
   const [workspaceError,setWorkspaceError] = useState("");
-  const [saveBusy,setSaveBusy] = useState(false);\n  const [statusDrafts,setStatusDrafts] = useState<Record<string,string>>({});
+  const [saveBusy,setSaveBusy] = useState(false);
+  const [statusDrafts,setStatusDrafts] = useState<Record<string,string>>({});
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [orgId,setOrgId] = useState("");
