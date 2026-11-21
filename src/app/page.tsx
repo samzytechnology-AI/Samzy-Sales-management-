@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; outboundEnabled?: boolean };
-type ChatMessage = { role: "user" | "assistant"; content: string; id: number };\ntype WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[] };
+type ChatMessage = { role: "user" | "assistant"; content: string; id: number };
+type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[] };
 
 function getBrowserSupabase(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
