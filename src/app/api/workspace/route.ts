@@ -31,7 +31,7 @@ async function authorize(request: NextRequest, write = false) {
 const createSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("client"), company_name: z.string().trim().min(2).max(160), primary_contact_name: z.string().trim().max(120).optional(), email: z.string().email().max(254).optional().or(z.literal("")), phone: z.string().trim().max(40).optional(), website_url: z.string().url().max(2048).optional().or(z.literal("")), industry: z.string().trim().max(100).optional(), notes: z.string().trim().max(2000).optional() }),
   z.object({ type: z.literal("project"), project_name: z.string().trim().min(2).max(160), status: z.enum(["planned","in_progress","blocked","review","delivered","cancelled"]).default("planned"), quoted_amount_ngn: z.number().int().nonnegative().optional(), due_at: z.string().datetime().optional(), client_id: z.string().uuid().optional().or(z.literal("")), prospect_id: z.string().uuid().optional().or(z.literal("")) }),
-  z.object({ type: z.literal("prospect"), company_name: z.string().trim().min(2).max(160), website_url: z.string().url().max(2048).optional().or(z.literal("")), industry: z.string().trim().max(100).optional(), country: z.string().trim().max(80).optional(), research_summary: z.string().trim().max(3000).optional() }),
+  z.object({ type: z.literal("prospect"), company_name: z.string().trim().min(2).max(160), website_url: z.string().url().max(2048).optional().or(z.literal("")), industry: z.string().trim().max(100).optional(), country: z.string().trim().max(80).optional(), fit_score: z.number().int().min(0).max(100).optional(), research_summary: z.string().trim().max(3000).optional() }),
   z.object({ type: z.literal("finance"), direction: z.enum(["income","expense"]), category: z.string().trim().min(2).max(80), description: z.string().trim().min(3).max(300), amount_ngn: z.number().int().positive().max(1_000_000_000_000), status: z.enum(["recorded","pending","void"]).default("recorded"), occurred_at: z.string().date().optional() }),
   z.object({ type: z.literal("product"), product_name: z.string().trim().min(2).max(120), product_key: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/), dashboard_url: z.string().url().max(2048).optional().or(z.literal("")), integration_mode: z.enum(["manual","api","webhook","oauth"]).default("manual"), capabilities: z.array(z.string().trim().min(1).max(60)).max(30).default([]) }),
   z.object({ type: z.literal("approval"), title: z.string().trim().min(3).max(160), description: z.string().trim().min(5).max(2000), category: z.enum(["outreach","pricing","contract","payment","delivery","other"]) }),
@@ -92,6 +92,14 @@ export async function POST(request: NextRequest) {
     if (new TextEncoder().encode(raw).byteLength > 16_384) return error("Request is too large.", 413);
     const input = createSchema.parse(JSON.parse(raw));
     const { db, organizationId, user } = auth;
+    if (input.type === "prospect" && input.website_url) {
+      const normalizedWebsite = new URL(input.website_url).toString();
+      const { data: duplicate, error: duplicateError } = await db.from("prospects")
+        .select("id,company_name").eq("organization_id", organizationId)
+        .eq("website_url", normalizedWebsite).maybeSingle();
+      if (duplicateError) return error("Could not verify whether this prospect already exists.", 503);
+      if (duplicate) return error(`A prospect for ${duplicate.company_name} with this website already exists.`, 409);
+    }
     if (input.type === "project" && input.client_id) {
       const { data: linkedClient, error: clientLookupError } = await db.from("clients").select("id").eq("id", input.client_id).eq("organization_id", organizationId).maybeSingle();
       if (clientLookupError || !linkedClient) return error("The selected client does not belong to this company workspace.", 403);
@@ -118,7 +126,7 @@ export async function POST(request: NextRequest) {
 const patchSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("approval"), id: uuid, decision: z.enum(["approved","rejected"]), decision_note: z.string().trim().max(1000).optional() }),
   z.object({ type: z.literal("convert_prospect"), prospect_id: uuid }),
-  z.object({ type: z.literal("prospect"), id: uuid, status: z.enum(["discovered","researching","qualified","contacted","replied","opportunity","customer","disqualified"]) }),
+  z.object({ type: z.literal("prospect"), id: uuid, status: z.enum(["discovered","researching","qualified","contacted","replied","opportunity","disqualified"]) }),
   z.object({ type: z.literal("project"), id: uuid, status: z.enum(["planned","in_progress","blocked","review","delivered","cancelled"]) }),
   z.object({ type: z.literal("client"), id: uuid, status: z.enum(["active","inactive","on_hold"]) }),
 ]);
