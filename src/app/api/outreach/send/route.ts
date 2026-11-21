@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { evaluateOutreach } from "@/lib/outreach/policy";
-import { sendEmailWithResend } from "@/lib/outreach/resend";
+import { ResendDeliveryError, sendEmailWithResend } from "@/lib/outreach/resend";
 
 export const runtime = "nodejs";
 const uuid = z.string().uuid();
@@ -132,8 +132,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ status: "sent", messageId: sent.messageId }, { headers: noStore });
   } catch (cause) {
-    const message = cause instanceof Error ? cause.message : "Email delivery failed.";
-    const ambiguous = !message.includes("rejected");
+    const ambiguous = !(cause instanceof ResendDeliveryError) || cause.ambiguous;
     await db.from("outreach_events").update({ status: ambiguous ? "send_unknown" : "failed" })
       .eq("id", event.id).eq("organization_id", organizationId).eq("status", "sending");
     return fail(ambiguous
