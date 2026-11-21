@@ -54,7 +54,7 @@ Vercel deployment and production environment configuration are intentionally def
 - Build the production app with `npm run build`.
 - Install the Playwright Chromium browser with `npx playwright install chromium`.
 - Run dashboard browser tests with `npm run test:e2e`.
-- The current 22-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM and product assignment, prospect-to-client conversion, live overview metrics contact-point capture safeguards and shared AI conversation history attribution.
+- The current 23-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM and product assignment, prospect-to-client conversion, live overview metrics contact-point capture safeguards and shared AI conversation history attribution.
 - Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
 
 
@@ -82,3 +82,12 @@ Vercel deployment and production environment configuration are intentionally def
 
 
 Contact-point verification is a recorded manual attestation by an owner or administrator, not an automated mailbox or telephone verification. The audit event stores the operator's verification note and method. Do not describe a contact as independently verified unless an external verification process was actually completed.
+
+
+## AI-to-approval handoff
+- The three-model synthesis may emit one structured proposal only when the user explicitly requests a supported company operation and the required details are present.
+- The server strips the marker from the visible answer, validates the proposal against strict Zod schemas, links it to the originating AI run, and saves it as `pending_approval`.
+- A malformed, ambiguous or unsupported proposal is discarded with a warning. The AI cannot approve or execute its own proposal.
+- An owner or administrator must approve the request; the database transaction then rechecks role and organisation scope before executing the whitelisted operation.
+- The current safe whitelist does not include outbound delivery, payments, contracts, final pricing, deletions or other irreversible actions.
+- Migrations 007 and 008 include explicit least-privilege grants for new public tables. This is required on current Supabase projects where new tables are not automatically exposed through the Data API.
