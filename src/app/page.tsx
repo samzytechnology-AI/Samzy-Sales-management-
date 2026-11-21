@@ -217,10 +217,10 @@ export default function Home() {
         {active==="Overview"?<>
           <section className="metrics">
             {[
-              ["Pipeline prospects","—","CRM integration pending","◎","blue"],
-              ["Active clients","—","Verified client records","♙","violet"],
-              ["Projects in progress","—","Across connected products","▣","cyan"],
-              ["Revenue tracked","—","Recorded company income","₦","green"]
+              ["Pipeline prospects",workspace?.summary?String(workspace.summary.prospects):"—","Live CRM prospect records","◎","blue"],
+              ["Active clients",workspace?.summary?String(workspace.summary.clients):"—","Registered company clients","♙","violet"],
+              ["Projects in progress",workspace?.summary?String(workspace.summary.activeProjects):"—","In progress, blocked or in review","▣","cyan"],
+              ["Revenue tracked",workspace?.summary?naira(workspace.summary.incomeNgn):"—","Recorded company income","₦","green"]
             ].map(([label,value,sub,icon,color])=><article className="metric" key={label}><div className="metric-head"><span>{label}</span><i className={`metric-icon ${color}`}>{icon}</i></div><strong>{value}</strong><small>{sub}</small></article>)}
           </section>
           <section className="dashboard-grid">
