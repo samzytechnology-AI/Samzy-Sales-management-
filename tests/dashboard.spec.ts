@@ -196,13 +196,19 @@ test("authenticated dashboard can add a prospect to CRM", async ({ page }) => {
   await expect.poll(() => records.prospects[0].status).toBe("qualified");
 });
 
-test("authenticated dashboard can create a project", async ({ page }) => {
+test("authenticated dashboard can create and link a project to a client and prospect", async ({ page }) => {
   const records = await connectMockWorkspace(page);
+  records.clients.push({ id: "client-1", company_name: "Project Test Client", status: "active" });
+  records.prospects.push({ id: "prospect-1", company_name: "Project Test Prospect", status: "qualified" });
   await page.locator("nav").getByRole("button", { name: /Projects/ }).click();
   await page.getByPlaceholder("Project name").fill("Test Website Project");
   await page.getByPlaceholder("Quoted amount (₦)").fill("200000");
+  await page.locator('select[name="client_id"]').selectOption("client-1");
+  await page.locator('select[name="prospect_id"]').selectOption("prospect-1");
   await page.getByRole("button", { name: "Create project" }).click();
   await expect.poll(() => records.projects.length).toBe(1);
+  expect(records.projects[0].client_id).toBe("client-1");
+  expect(records.projects[0].prospect_id).toBe("prospect-1");
   await expect(page.getByText("Test Website Project")).toBeVisible();
   const row = page.locator(".record-row").filter({ hasText: "Test Website Project" });
   await row.locator("select").selectOption("in_progress");
