@@ -34,7 +34,7 @@ Database migrations and live AI providers still require configuration. Resend em
 - Authenticated chat requests are scoped to an organization and an owner/admin/manager membership.
 - Conversations and messages are persisted in `ai_conversations` and `ai_messages`; the dashboard opens one shared active company conversation for authorised owner/admin/manager users, so the General Manager history is company-wide rather than fragmented by user. Older personal conversations remain private.
 - AI runs retain the initiating user, model contributions, synthesis, warnings and conversation reference.
-- The server enforces an atomic limit of 30 AI requests per user per organization per hour. Adjust only after measuring provider quotas and cost.
+- The server enforces an atomic shared limit of 30 AI and live-research requests per user per organization per hour. Adjust only after measuring provider quotas and cost.
 - The browser never receives provider credentials. The server uses the Supabase service-role key only after verifying the user's bearer token and organization membership.
 
 ## Database migration order
