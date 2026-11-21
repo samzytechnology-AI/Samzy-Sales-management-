@@ -85,8 +85,8 @@ export async function POST(request: NextRequest) {
     // Give the AI General Manager a fresh, read-only snapshot of the real company workspace.
     const [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult] = await Promise.all([
       supabase.from("prospects").select("id,company_name,website_url,industry,country,fit_score,status,research_summary,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
-      supabase.from("clients").select("id,company_name,primary_contact_name,email,phone,industry,status,source_prospect_id,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(25),
-      supabase.from("projects").select("id,project_name,status,quoted_amount_ngn,approved_amount_ngn,due_at,client_id,prospect_id,product_id,updated_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(25),
+      supabase.from("clients").select("id,company_name,industry,status,source_prospect_id,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
+      supabase.from("projects").select("id,project_name,status,quoted_amount_ngn,approved_amount_ngn,due_at,client_id,prospect_id,product_id,updated_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
       supabase.from("approval_requests").select("id,title,category,status,created_at,decided_at,decision_note").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(10),
       supabase.from("outreach_events").select("id,prospect_id,channel,recipient,direction,status,body,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(10),
       supabase.rpc("get_financial_summary", { p_organization_id: organizationId }),
