@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   const { data: contact, error: contactError } = await db.from("contact_points")
     .select("id,is_verified,consent_basis,address")
     .eq("organization_id", organizationId).eq("prospect_id", event.prospect_id)
-    .eq("channel", "email").eq("address", normalizedAddress).maybeSingle();
+    .eq("channel", "email").eq("address", event.recipient).maybeSingle();
   if (contactError || !contact || !contact.is_verified || !contact.consent_basis?.trim()) {
     return fail("Sending requires a verified email contact and a recorded consent/source basis.", 409);
   }
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     db.from("suppression_list").select("id").eq("organization_id", organizationId)
       .eq("channel", "email").eq("normalized_address", normalizedAddress).maybeSingle(),
     db.from("outreach_events").select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId).eq("channel", "email").eq("recipient", normalizedAddress)
+      .eq("organization_id", organizationId).eq("channel", "email").eq("recipient", event.recipient)
       .eq("direction", "outbound").in("status", ["sent","send_unknown","sending"])
       .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
     db.from("outreach_events").select("id", { count: "exact", head: true })
