@@ -33,11 +33,16 @@ Database migrations, provider adapters, messaging delivery and deployment requir
 ## Database migration order
 Apply these migrations, in order, only to the new dedicated Business Command Centre Supabase project:
 1. `supabase/migrations/20261121000100_command_centre_core.sql`
-2. `supabase/migrations/20261121000200_ai_manager_persistence_and_limits.sql`\n3. `supabase/migrations/20261121000300_dashboard_operational_records.sql`\n4. `supabase/migrations/20261121000400_finance_summary_rpc.sql`
+2. `supabase/migrations/20261121000200_ai_manager_persistence_and_limits.sql`
+3. `supabase/migrations/20261121000300_dashboard_operational_records.sql`
+4. `supabase/migrations/20261121000400_finance_summary_rpc.sql`
 
 Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
 
-## Dashboard operational modules\nThe authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; product registry and outreach history are read-only in the current dashboard UI. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003 and 004 before these live modules can load.\n\n## Deployment boundary
+## Dashboard operational modules
+The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; product registry and outreach history are read-only in the current dashboard UI. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003 and 004 before these live modules can load.
+
+## Deployment boundary
 Vercel deployment and production environment configuration are intentionally deferred until the application code and verification pass are complete. At deployment time, add server-side provider keys and `SUPABASE_SERVICE_ROLE_KEY` as protected Vercel environment variables. Only the Supabase URL and anon/public key may be exposed to the browser.
 
 ## Dashboard interaction tests
