@@ -50,5 +50,5 @@ Vercel deployment and production environment configuration are intentionally def
 - Build the production app with `npm run build`.
 - Install the Playwright Chromium browser with `npx playwright install chromium`.
 - Run dashboard browser tests with `npm run test:e2e`.
-- The current browser suite covers primary navigation, AI Manager controls, secure sign-in error handling, mocked authenticated workspace access, and create/approval workflows for clients, products, finance and approval requests.
+- The current 15-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create/approval workflows for prospects, clients, projects, products, finance and approval requests.
 - Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
