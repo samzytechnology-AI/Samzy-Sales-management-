@@ -16,14 +16,14 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $$
   select exists (
     select 1 from public.organization_members
     where organization_id = target_org
       and user_id = auth.uid()
       and role in ('owner','admin','manager')
   );
-$;
+$$;
 revoke all on function public.can_access_company_ai(uuid) from public;
 revoke all on function public.can_access_company_ai(uuid) from anon;
 grant execute on function public.can_access_company_ai(uuid) to authenticated;
