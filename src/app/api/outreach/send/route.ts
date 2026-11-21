@@ -101,6 +101,13 @@ export async function POST(request: NextRequest) {
   }, "email");
   if (!eligibility.allowed) return fail(eligibility.reason, 409);
 
+  let accessToken: string;
+  try {
+    ({ accessToken } = await getGmailAccessToken(organizationId));
+  } catch {
+    return fail("The Samzy Gmail mailbox is not connected or its access token could not be refreshed. The draft remains unsent.", 503);
+  }
+
   // Atomically claim the draft. A second click or concurrent request cannot send it again.
   const { data: claimed, error: claimError } = await db.from("outreach_events")
     .update({ status: "sending" }).eq("id", event.id).eq("organization_id", organizationId)
@@ -118,7 +125,7 @@ export async function POST(request: NextRequest) {
       text: event.body.trim(),
     });
     const { error: updateError } = await db.from("outreach_events")
-      .update({ status: "sent", provider_message_id: sent.messageId, sent_at: new Date().toISOString() })
+      .update({ status: "sent", approved_by: authData.user.id, provider_message_id: sent.messageId, sent_at: new Date().toISOString() })
       .eq("id", event.id).eq("organization_id", organizationId).eq("status", "sending");
     if (updateError) {
       await db.from("outreach_events").update({ status: "send_unknown" })
