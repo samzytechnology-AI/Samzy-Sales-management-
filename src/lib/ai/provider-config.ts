@@ -21,7 +21,7 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
 const DEFAULT_MODELS: Record<string, string> = {
   gemini: "gemini-3.8-flash",
   groq: "openai/gpt-oss-120b",
-  openrouter: "nvidia/nemotron-3-ultra:free",
+  openrouter: "qwen/qwen3.8-27b",
   openai: "gpt-6.2-sol",
   anthropic: "claude-sonnet-5-5",
 };
