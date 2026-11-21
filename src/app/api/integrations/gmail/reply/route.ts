@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     };
     if (original.threadId !== input.threadId) throw new Error("The selected message does not belong to the supplied Gmail thread.");
     const headers = original.payload?.headers ?? [];
-    const recipient = addressFromHeader(header(headers, "From"));
+    const recipient = addressFromHeader(header(headers, "Reply-To") || header(headers, "From"));
     if (recipient === emailAddress.toLowerCase()) throw new Error("The original sender is the connected Samzy mailbox; no reply was sent.");
     const originalSubject = header(headers, "Subject").replace(/\r|\n/g, " ").trim();
     const subject = /^re:/i.test(originalSubject) ? originalSubject : `Re: ${originalSubject || "(No subject)"}`;
