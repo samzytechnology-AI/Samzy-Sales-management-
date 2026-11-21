@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     const boundedApprovedMemory = (memory ?? []).map(item => ({ ...item, content: item.content.slice(0, 800) }));
     const companySnapshot = {
       capturedAt: new Date().toISOString(),
-      dataScope: "Verified records read from this organisation's Business Command Centre database. Empty arrays mean no records were found; they do not imply activity outside this system.",
+      dataScope: "Records read from this organisation's Business Command Centre database. Database presence confirms the record is stored, not that its claims were independently verified. Empty arrays mean no records were found; they do not imply activity outside this system.",
       loadedRecordCounts: {
         recentProspects: prospectsResult.data?.length ?? 0,
         recentClients: clientsResult.data?.length ?? 0,
