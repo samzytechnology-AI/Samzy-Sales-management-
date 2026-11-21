@@ -39,6 +39,7 @@ Apply these migrations, in order, only to the new dedicated Business Command Cen
 5. `supabase/migrations/20261121000500_crm_prospect_conversion.sql`
 6. `supabase/migrations/20261121000600_shared_company_ai_conversation.sql`
 7. `supabase/migrations/20261121000700_ai_action_approval_engine.sql`
+8. `supabase/migrations/20261121000800_task_management.sql`
 
 Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
 
@@ -53,7 +54,7 @@ Vercel deployment and production environment configuration are intentionally def
 - Build the production app with `npm run build`.
 - Install the Playwright Chromium browser with `npx playwright install chromium`.
 - Run dashboard browser tests with `npm run test:e2e`.
-- The current 19-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM and product assignment, prospect-to-client conversion, live overview metrics contact-point capture safeguards and shared AI conversation history attribution.
+- The current 21-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM and product assignment, prospect-to-client conversion, live overview metrics contact-point capture safeguards and shared AI conversation history attribution.
 - Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
 
 
@@ -65,3 +66,9 @@ Vercel deployment and production environment configuration are intentionally def
 - The Approvals screen includes an AI-assisted prospect proposal form and a queue for reviewing and executing action requests.
 - The automated browser suite includes the proposal → pending approval → approve/execute lifecycle. Browser tests mock the API; they do not prove live PostgreSQL transaction behaviour.
 - Apply migration 007 after migrations 001–006. It has not been applied to a live database.
+
+
+## Task management
+- Organisation-scoped tasks support priorities, due dates, statuses and optional links to same-organisation projects, clients and prospects.
+- Task creation validates linked records server-side; status changes are audited.
+- Apply migration 008 after migrations 001–007. It has not been applied to a live database.
