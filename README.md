@@ -119,7 +119,7 @@ Migration 009 explicitly grants the server-only `service_role` access to the exi
 - Current default model IDs are configurable in Vercel and should be rechecked against provider model availability and account quotas before production use.
 - Tavily is the live research provider. Requests are bounded to eight results and snippets are treated as untrusted evidence.
 - Gmail OAuth requests read/modify and send permissions. Refresh tokens are encrypted with AES-256-GCM before being stored in the dedicated `gmail_integrations` table. The inbox can be synced for reply analysis, and outbound replies require an explicit owner/admin send action. AI never sends email autonomously.
-- Add the exact deployed callback URL `https://YOUR_DEPLOYMENT_HOST/api/integrations/gmail/callback` to the Google OAuth client's Authorized redirect URIs. Complete the Google consent flow from Settings after deployment.
+- Add the exact deployed callback URL `https://samzy-sales-management-samzytechnology-6540.vercel.app/api/integrations/gmail/callback` to the Google OAuth client's Authorized redirect URIs. Complete the Google consent flow from Settings after deployment.
 - The dashboard username is mapped server-side using `DASHBOARD_LOGIN_USERNAME` and `DASHBOARD_LOGIN_EMAIL`. The password is not an environment variable; it is verified by Supabase Auth. Create the owner account in Supabase Auth and set a strong password there. Do not use a password exposed in chat.
 - Required server-only variables include `SUPABASE_SERVICE_ROLE_KEY` and `GMAIL_TOKEN_ENCRYPTION_KEY`. The service-role key must never use a `NEXT_PUBLIC_` prefix.
 - The Gmail migration has been applied to the dedicated Business Command Centre database. Gmail mailbox authorization is not yet completed.
