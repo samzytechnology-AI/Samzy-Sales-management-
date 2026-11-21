@@ -30,6 +30,10 @@ create policy "members read own organisation action requests"
   on public.ai_action_requests for select
   using (public.can_access_company_ai(organization_id));
 
+-- Explicit Data API grants are required on new public tables in current Supabase projects.
+grant select on table public.ai_action_requests to authenticated;
+grant select, insert, update, delete on table public.ai_action_requests to service_role;
+
 create or replace function public.review_ai_action_request(
   p_organization_id uuid,
   p_action_request_id uuid,
