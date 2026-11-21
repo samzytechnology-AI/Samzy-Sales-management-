@@ -86,7 +86,7 @@ export default function Home() {
     if(type==="product")payload.capabilities=(fields.capabilities??"").split(",").map(x=>x.trim()).filter(Boolean);
     if(type==="project"&&fields.quoted_amount_ngn)payload.quoted_amount_ngn=Number(fields.quoted_amount_ngn);
     if(type==="project"&&fields.due_at)payload.due_at=new Date(fields.due_at).toISOString();
-    for(const key of ["email","website_url","dashboard_url","due_at","occurred_at","quoted_amount_ngn","capabilities","client_id","prospect_id","product_id"])if(payload[key]==="")delete payload[key];
+    for(const key of ["email","website_url","dashboard_url","due_at","occurred_at","quoted_amount_ngn","fit_score","capabilities","client_id","prospect_id","product_id"])if(payload[key]==="")delete payload[key];
     setSaveBusy(true);setWorkspaceError("");
     try{
       const response=await fetch("/api/workspace",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify(payload)});
