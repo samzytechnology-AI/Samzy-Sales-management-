@@ -19,7 +19,7 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
   anthropic: "https://api.anthropic.com",
 };
 const DEFAULT_MODELS: Record<string, string> = {
-  gemini: "gemini-4-neon",
+  gemini: "gemini-3.8-flash",
   groq: "openai/gpt-oss-120b",
   openrouter: "nvidia/nemotron-3-ultra:free",
   openai: "gpt-6.2-sol",
