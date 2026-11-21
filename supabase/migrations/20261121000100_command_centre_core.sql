@@ -73,7 +73,7 @@ create table if not exists public.contact_points (
   address text not null,
   is_verified boolean not null default false,
   consent_basis text,
-  created_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
 );
 create unique index if not exists contact_points_org_channel_address_unique on public.contact_points(organization_id, channel, lower(address));
 
