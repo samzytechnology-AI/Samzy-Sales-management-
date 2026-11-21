@@ -156,15 +156,21 @@ exception when others then
   if v_request.id is null then
     raise;
   end if;
-  if v_request.id is not null then
-    update public.ai_action_requests
-      set status='failed',approved_by=p_actor_user_id,decided_at=now(),failure_reason=left(sqlerrm,1000)
-      where id=v_request.id and status='pending_approval';
+  -- The exception block rolls back the attempted business write to its savepoint.
+  -- Persist the failed state outside that rolled-back work, then return normally so
+  -- the status and diagnostic survive the RPC transaction.
+  update public.ai_action_requests
+    set status='failed',approved_by=p_actor_user_id,decided_at=now(),failure_reason=left(sqlerrm,1000)
+    where id=v_request.id and status='pending_approval';
+  begin
     insert into public.audit_events(organization_id,actor_user_id,actor_type,action,entity_type,entity_id,metadata)
       values(p_organization_id,p_actor_user_id,'user','ai_action.execution_failed','ai_action_request',v_request.id,
         jsonb_build_object('action_type',v_request.action_type,'reason',left(sqlerrm,1000)));
-  end if;
-  raise;
+  exception when others then
+    -- A secondary audit failure must not erase the durable failed action state.
+    null;
+  end;
+  return jsonb_build_object('id',v_request.id,'status','failed','failure_reason',left(sqlerrm,1000));
 end;
 $$;
 
