@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { evaluateOutreach } from "@/lib/outreach/policy";
-import { ResendDeliveryError, sendEmailWithResend } from "@/lib/outreach/resend";
+import { GmailDeliveryError, sendEmailWithGmail } from "@/lib/outreach/gmail";\nimport { getGmailAccessToken } from "@/lib/gmail/tokens";
 
 export const runtime = "nodejs";
 const uuid = z.string().uuid();
@@ -35,10 +35,9 @@ export async function POST(request: NextRequest) {
     .select("role").eq("organization_id", organizationId).eq("user_id", authData.user.id).maybeSingle();
   if (memberError) return fail("Could not verify company membership.", 503);
   if (!member || !["owner", "admin"].includes(member.role)) return fail("Only an organisation owner or administrator can send external outreach.", 403);
-  const apiKey = process.env.RESEND_API_KEY ?? "";
-  const from = process.env.OUTREACH_FROM_EMAIL ?? "";
-  const replyTo = process.env.OUTREACH_REPLY_TO_EMAIL ?? "";
-  if (!apiKey || !from) return fail("Email delivery is not configured. Add RESEND_API_KEY and OUTREACH_FROM_EMAIL on the server before sending.", 503);
+  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.GMAIL_TOKEN_ENCRYPTION_KEY) {
+    return fail("Gmail API credentials and encrypted token storage are not configured.", 503);
+  }
 
 
   const { data: event, error: eventError } = await db.from("outreach_events")
@@ -110,14 +109,12 @@ export async function POST(request: NextRequest) {
 
   const companyName = prospect.data?.company_name?.trim() || "your business";
   try {
-    const sent = await sendEmailWithResend({
-      apiKey,
-      from,
+    const { accessToken } = await getGmailAccessToken(organizationId);
+    const sent = await sendEmailWithGmail({
+      accessToken,
       to: normalizedAddress,
       subject: `A quick idea for ${companyName}`,
       text: event.body.trim(),
-      idempotencyKey: event.id,
-      replyTo: replyTo || undefined,
     });
     const { error: updateError } = await db.from("outreach_events")
       .update({ status: "sent", provider_message_id: sent.messageId, sent_at: new Date().toISOString() })
@@ -130,7 +127,7 @@ export async function POST(request: NextRequest) {
     const { error: auditError } = await db.from("audit_events").insert({
       organization_id: organizationId, actor_user_id: authData.user.id, actor_type: "user",
       action: "outreach.email.sent", entity_type: "outreach_event", entity_id: event.id,
-      metadata: { provider: "resend", provider_message_id: sent.messageId },
+      metadata: { provider: "gmail", provider_message_id: sent.messageId },
     });
     return NextResponse.json({
       status: "sent",
@@ -138,7 +135,7 @@ export async function POST(request: NextRequest) {
       ...(auditError ? { warning: "The email was sent and recorded, but the audit event could not be saved. An administrator should review the audit log." } : {}),
     }, { headers: noStore });
   } catch (cause) {
-    const ambiguous = !(cause instanceof ResendDeliveryError) || cause.ambiguous;
+    const ambiguous = !(cause instanceof GmailDeliveryError) || cause.ambiguous;
     await db.from("outreach_events").update({ status: ambiguous ? "send_unknown" : "failed" })
       .eq("id", event.id).eq("organization_id", organizationId).eq("status", "sending");
     return fail(ambiguous
