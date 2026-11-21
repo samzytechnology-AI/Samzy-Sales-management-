@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { searchBusinessWeb } from "@/lib/research/brave-search";
+import { searchBusinessWeb } from "@/lib/research/tavily-search";
 
 export const runtime = "nodejs";
 const uuid = z.string().uuid();
@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
     if (!member || !["owner","admin","manager"].includes(member.role)) {
       return NextResponse.json({ error: "You cannot research prospects for this organisation." }, { status: 403, headers: noStore });
     }
-    const apiKey = process.env.BRAVE_SEARCH_API_KEY ?? "";
-    if (!apiKey) return NextResponse.json({ error: "Live web research is not configured. Add BRAVE_SEARCH_API_KEY as a server-only environment variable." }, { status: 503, headers: noStore });
+    const apiKey = process.env.TAVILY_API_KEY ?? "";
+    if (!apiKey) return NextResponse.json({ error: "Live web research is not configured. Add TAVILY_API_KEY as a server-only environment variable." }, { status: 503, headers: noStore });
     const { data: withinLimit, error: limitError } = await db.rpc("consume_ai_rate_limit", {
       p_organization_id: organizationId,
       p_user_id: authData.user.id,
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (limitError) throw new Error("Could not enforce the research usage limit.");
     if (!withinLimit) return NextResponse.json({ error: "The shared AI/research limit is 30 requests per hour for this user and organisation." }, { status: 429, headers: noStore });
     const evidence = await searchBusinessWeb(input.query, apiKey, input.country);
-    return NextResponse.json({ evidence, capturedAt: new Date().toISOString(), source: "Brave Search" }, { headers: noStore });
+    return NextResponse.json({ evidence, capturedAt: new Date().toISOString(), source: "Tavily" }, { headers: noStore });
   } catch {
     return NextResponse.json({ error: "Live web research failed. No search results were added to the AI context." }, { status: 502, headers: noStore });
   }
