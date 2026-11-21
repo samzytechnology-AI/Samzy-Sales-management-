@@ -1,6 +1,7 @@
 import type { CoordinatedResult, ModelAdapter, ModelRequest } from "./types";
 import { SAMZY_REVENUE_PLAYBOOK } from "./sales-playbook";
 import { SAMZY_BUSINESS_LIFECYCLE } from "../business/lifecycle-playbook";
+import { renderSamzyServiceDiscoveryRules } from "../business/service-catalog";
 
 /** Three independent agents share one objective; a second pass produces a unified synthesis. */
 export async function coordinateModels(request: ModelRequest, adapters: ModelAdapter[]): Promise<CoordinatedResult> {
@@ -16,7 +17,7 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
   } as const;
   const enrichedRequest: ModelRequest = {
     ...request,
-    objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SAMZY_REVENUE_PLAYBOOK, "Apply the end-to-end company operating lifecycle below.", SAMZY_BUSINESS_LIFECYCLE].join("\n\n"),
+    objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SAMZY_REVENUE_PLAYBOOK, "Apply the end-to-end company operating lifecycle below.", SAMZY_BUSINESS_LIFECYCLE, "Use the official Samzy service catalogue and prospect-matching rules below.", renderSamzyServiceDiscoveryRules()].join("\n\n"),
   };
   const settled = await Promise.allSettled(adapters.map((adapter) => adapter.generate({
     ...enrichedRequest,
