@@ -244,8 +244,28 @@ export default function Home() {
       setBusy(false);return;
     }
     try{
+      let evidence:Array<{url:string;title?:string;excerpt?:string}> = [];
+      let researchWarning = "";
+      const needsResearch = ["prospect_discovery","company_research","lead_qualification","outreach_draft"].includes(task)
+        || /\b(research|look up|look at (?:this|the) company|analyse (?:this|the) business|analyze (?:this|the) business|prospect website)\b/i.test(question);
+      if(needsResearch){
+        try{
+          const countryMatch = [
+            [/\b(nigeria|nigerian)\b/i,"NG"],[/\b(united kingdom|uk|british)\b/i,"GB"],
+            [/\b(united states|usa|us|american)\b/i,"US"],[/\b(canada|canadian)\b/i,"CA"],
+            [/\b(australia|australian)\b/i,"AU"],[/\b(uae|united arab emirates|dubai)\b/i,"AE"],
+            [/\b(south africa|south african)\b/i,"ZA"],
+          ] as Array<[RegExp,string]>;
+          const country = countryMatch.find(([pattern])=>pattern.test(question))?.[1];
+          const researchResponse=await fetch("/api/research/web",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({query:question,...(country?{country}:{})})});
+          const researchResult=await researchResponse.json();
+          if(researchResponse.ok&&Array.isArray(researchResult.evidence))evidence=researchResult.evidence;
+          else researchWarning=researchResult.error??"Live web research was unavailable; the AI will use only connected company records.";
+        }catch{researchWarning="Live web research was unavailable; the AI will use only connected company records.";}
+      }
       const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({
         task,objective:question,
+        ...(evidence.length?{evidence}:{}),
         ...(conversationId?{conversationId}:{}),
         context:{
           product:"Samzy Business Command Centre",
@@ -265,7 +285,8 @@ export default function Home() {
       const result=await response.json();
       if(!response.ok)throw new Error(result.error??"The AI service could not complete the request.");
       if(result.conversationId)setConversationId(result.conversationId);
-      const answer=[result.synthesis,result.warnings?.length?"\n\nWarnings: "+result.warnings.join("; "):""].join("");
+      const allWarnings=[...(result.warnings??[]),...(researchWarning?[researchWarning]:[])];
+      const answer=[result.synthesis,allWarnings.length?"\n\nNotes: "+allWarnings.join("; "):""].join("");
       setMessages(old=>[...old,{id:Date.now()+2,role:"assistant",content:answer||"The AI service returned no synthesis."}]);
     }catch(err){
       setMessages(old=>[...old,{id:Date.now()+3,role:"assistant",content:err instanceof Error?err.message:"Unable to reach the AI service."}]);
