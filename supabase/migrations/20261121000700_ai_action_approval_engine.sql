@@ -5,6 +5,7 @@ create table if not exists public.ai_action_requests (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   requested_by uuid not null references auth.users(id),
+  ai_run_id uuid references public.ai_runs(id) on delete set null,
   approved_by uuid references auth.users(id),
   action_type text not null check (action_type in (
     'create_prospect','update_prospect_status','create_project',
