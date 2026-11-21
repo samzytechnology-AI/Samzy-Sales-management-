@@ -148,6 +148,9 @@ begin
       jsonb_build_object('action_type',v_request.action_type,'result',v_result,'note',left(coalesce(p_decision_note,''),1000)));
   return jsonb_build_object('id',v_request.id,'status','executed','result',v_result);
 exception when others then
+  if v_request.id is null then
+    raise;
+  end if;
   if v_request.id is not null then
     update public.ai_action_requests
       set status='failed',approved_by=p_actor_user_id,decided_at=now(),failure_reason=left(sqlerrm,1000)
