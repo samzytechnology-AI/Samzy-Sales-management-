@@ -46,7 +46,7 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
   );
   if (!contributions.length) throw new Error(`All AI providers failed. ${warnings.join(" | ")}`);
 
-  const synthesizer = adapters.find((adapter) => adapter.slot === "D") ?? adapters.find((adapter) => adapter.slot === "E") ?? adapters.find((adapter) => adapter.slot === "C") ?? adapters[0];
+  const successfulSlots = new Set(contributions.map((item) => item.slot));\n  const synthesizer = (["D", "E", "C", "B", "A"] as const).map((slot) => adapters.find((adapter) => adapter.slot === slot && successfulSlots.has(slot))).find(Boolean) ?? adapters[0];
   let synthesis: string;
   try {
     const result = await synthesizer.generate({
