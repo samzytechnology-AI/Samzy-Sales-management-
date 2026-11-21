@@ -17,7 +17,7 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
   } as const;
   const enrichedRequest: ModelRequest = {
     ...request,
-    objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SAMZY_REVENUE_PLAYBOOK, "Apply the end-to-end company operating lifecycle below.", SAMZY_BUSINESS_LIFECYCLE, "Use the official Samzy service catalogue and prospect-matching rules below. The structured catalogue is also supplied in context; treat it as the source of truth.", renderSamzyServiceDiscoveryRules()].join("\n\n"),
+    objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SALES_CONVERSION_PLAYBOOK, "Apply the end-to-end company operating lifecycle below.", SAMZY_BUSINESS_LIFECYCLE, "Use the official Samzy service catalogue and prospect-matching rules below. The structured catalogue is also supplied in context; treat it as the source of truth.", renderSamzyServiceDiscoveryRules()].join("\n\n"),
     context: {
       ...request.context,
       samzyServiceCatalog: SAMZY_SERVICE_CATALOG,
