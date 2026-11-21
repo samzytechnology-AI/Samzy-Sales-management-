@@ -31,6 +31,7 @@ export default function Home() {
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [orgId,setOrgId] = useState("");
+  const [conversationId,setConversationId] = useState<string|null>(null);
   const [token,setToken] = useState("");
   const [authText,setAuthText] = useState("");
   const [draft,setDraft] = useState("");
@@ -44,6 +45,17 @@ export default function Home() {
     const client=getBrowserSupabase();
     if(client) client.auth.getSession().then(({data})=>{if(data.session?.access_token)setToken(data.session.access_token);});
   },[]);
+
+  useEffect(()=>{
+    if(!token||!orgId.trim())return;
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orgId.trim()))return;
+    let cancelled=false;
+    fetch("/api/ai/run",{method:"GET",headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"})
+      .then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error??"Could not restore chat history.");return data;})
+      .then(data=>{if(cancelled)return;setConversationId(data.conversationId??null);if(Array.isArray(data.messages)&&data.messages.length){setMessages(data.messages.map((m:{id:string;role:"user"|"assistant";content:string})=>({id:m.id,role:m.role==="user"?"user":"assistant",content:m.content})));}})
+      .catch(()=>{if(!cancelled)setAuthText("Workspace connected, but previous chat history could not be restored.");});
+    return ()=>{cancelled=true;};
+  },[token,orgId]);
 
   async function signIn(e:FormEvent){
     e.preventDefault(); setAuthText("");
@@ -67,6 +79,7 @@ export default function Home() {
     try{
       const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({
         task:"business_advice",objective:question,
+        ...(conversationId?{conversationId}:{}),
         context:{
           product:"Samzy Business Command Centre",
           company:"Samzy Technology Limited",
@@ -84,6 +97,7 @@ export default function Home() {
       })});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error??"The AI service could not complete the request.");
+      if(result.conversationId)setConversationId(result.conversationId);
       const answer=[result.synthesis,result.warnings?.length?"\n\nWarnings: "+result.warnings.join("; "):""].join("");
       setMessages(old=>[...old,{id:Date.now()+2,role:"assistant",content:answer||"The AI service returned no synthesis."}]);
     }catch(err){
