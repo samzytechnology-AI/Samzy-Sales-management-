@@ -1,5 +1,6 @@
 import type { CoordinatedResult, ModelAdapter, ModelRequest } from "./types";
 import { SAMZY_REVENUE_PLAYBOOK } from "./sales-playbook";
+import { SAMZY_BUSINESS_LIFECYCLE } from "../business/lifecycle-playbook";
 
 /** Three independent agents share one objective; a second pass produces a unified synthesis. */
 export async function coordinateModels(request: ModelRequest, adapters: ModelAdapter[]): Promise<CoordinatedResult> {
@@ -15,7 +16,7 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
   } as const;
   const enrichedRequest: ModelRequest = {
     ...request,
-    objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SAMZY_REVENUE_PLAYBOOK].join("\n\n"),
+    objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SAMZY_REVENUE_PLAYBOOK, "Apply the end-to-end company operating lifecycle below.", SAMZY_BUSINESS_LIFECYCLE].join("\n\n"),
   };
   const settled = await Promise.allSettled(adapters.map((adapter) => adapter.generate({
     ...enrichedRequest,
@@ -41,6 +42,7 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
         "For prospect_discovery, company_research, lead_qualification, outreach_draft and reply_analysis, produce: verified snapshot; strongest evidenced opportunity; practical benefit and plausible revenue pathway; concise first message (35–65 words); likely reply scenarios with calibrated confidence or insufficient evidence; exact short next reply for each; conversion next step; risks and unknowns.",
         "The first message must earn a reply, not attempt to close. Make the business benefit immediately clear. Keep client-facing drafts concise and natural.",
         "Return an executive decision, evidence-backed findings, disagreements/risks, recommended next actions, and confidence/unknowns.",
+        "For client/project/finance/operations questions, identify the current business lifecycle stage and give the next best operational action. Distinguish quoted value, signed contract value, invoiced amount, outstanding balance and cash actually collected. Include delivery milestones, acceptance evidence, overdue receivables and retention opportunities when relevant.",
         "If and only if the original user explicitly requested one supported company operation and all required details are present, append exactly one [[SAMZY_ACTION_PROPOSAL]] JSON marker containing action_type, summary and a schema-valid payload. Never propose an action based only on a recommendation. Do not propose outreach delivery, payments, contracts, final prices or deletions. If details are missing, ask a question and omit the marker.",
       ].join(" "),
       context: {
