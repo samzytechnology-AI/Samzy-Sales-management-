@@ -19,7 +19,6 @@ async function connectMockWorkspace(page: import("@playwright/test").Page) {
   await page.route("**/api/ai/run", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: null, messages: [] }) }));
   await page.route("**/api/workspace**", async route => {
     const request = route.request();
-    console.log("WORKSPACE MOCK", request.method(), request.url());
     if (request.method() === "GET") {
       const summary = { prospects: records.prospects.length, clients: records.clients.length, activeProjects: records.projects.length, pendingApprovals: records.approvals.filter(x => x.status === "pending").length, incomeNgn: 0, expensesNgn: 0, netNgn: 0 };
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summary, ...Object.fromEntries(Object.entries(records).map(([key, value]) => [key, value])) }) });
@@ -29,7 +28,6 @@ async function connectMockWorkspace(page: import("@playwright/test").Page) {
       const input = request.postDataJSON() as Record<string, any>;
       const map: Record<string, string> = { client: "clients", project: "projects", prospect: "prospects", finance: "finance", approval: "approvals", product: "products" };
       const key = map[input.type];
-      console.log("WORKSPACE CREATE", input.type, key, input);
       if (!key) {
         await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Unknown mock record type" }) });
         return;
@@ -174,6 +172,8 @@ test("authenticated dashboard can submit and decide an approval request", async 
   await page.locator("nav").getByRole("button", { name: /Approvals/ }).click();
   await page.getByPlaceholder("Approval title").fill("Approve test outreach");
   await page.getByPlaceholder("What needs approval and why?").fill("Approve the reviewed sample outreach message.");
+  const approvalForm = page.locator(".record-form").last();
+  expect(await approvalForm.evaluate((form: HTMLFormElement) => form.checkValidity())).toBe(true);
   await page.getByRole("button", { name: "Submit for approval" }).click();
   await expect.poll(() => records.approvals.length).toBe(1);
   await expect(page.getByText("Approve test outreach")).toBeVisible();
