@@ -4,13 +4,13 @@ A modular operating system for Samzy Technology. The command centre coordinates 
 
 ## Engineering baseline
 - Next.js App Router and TypeScript.
-- Three-provider AI orchestration interface: all configured models receive the same objective and context, contribute concurrently, and return into one shared workflow.
+- Five-provider AI orchestration interface: all configured models receive the same objective and context, contribute concurrently, and return into one shared workflow.
 - Pricing policy engine with service floors and a separate negotiable asking-price calculation.
 - Anti-spam policy primitives: suppression, deduplication, contact history and approval-first outbound mode.
 - Supabase client placeholders for the dedicated Business Command Centre project only. Never connect the School Cloud database.
 
 ## Safety defaults
-- External email delivery remains disabled until the server-side Resend credentials are configured and an owner/admin explicitly clicks Send. WhatsApp first-contact delivery remains blocked until approved Meta templates and credentials are configured.
+- External email delivery remains disabled until the server-side Gmail credentials are configured and an owner/admin explicitly clicks Send. WhatsApp first-contact delivery remains blocked until approved Meta templates and credentials are configured.
 - No autonomous commitments, contracts, payment actions or final price approvals.
 - Never store provider API keys in browser code or commit secrets.
 - Research claims must retain source evidence and timestamps.
@@ -20,14 +20,14 @@ A modular operating system for Samzy Technology. The command centre coordinates 
 2. Copy `.env.example` to `.env.local` and add server-side secrets.
 3. Run `npm install` and `npm run dev`.
 
-Database migrations and live AI providers still require configuration. Resend email delivery is implemented through the guarded owner/admin send endpoint. WhatsApp Cloud API approved-template delivery is implemented through a separate guarded owner/admin endpoint; both require provider credentials, verified sender setup and live verification. WhatsApp inbound webhook/reply synchronisation remains pending. Database migration application and deployment remain pending.
+Database migrations and live AI providers still require configuration. Gmail email delivery is implemented through the guarded owner/admin send endpoint. WhatsApp Cloud API approved-template delivery is implemented through a separate guarded owner/admin endpoint; both require provider credentials, verified sender setup and live verification. WhatsApp inbound webhook/reply synchronisation remains pending. Database migration application and deployment remain pending.
 
 ## Live prospect research
-- Authenticated company users can request live web research through the server-side Brave Search adapter.
+- Authenticated company users can request live web research through the server-side Tavily adapter.
 - Prospect discovery, company research, lead qualification and outreach drafting tasks trigger one bounded search request; up to eight source-linked results are passed into the AI context as untrusted evidence.
 - The AI must distinguish source-backed facts from inference, cite source URLs and state unknowns. Search snippets do not independently verify a company's claims or guarantee buyer intent.
-- Configure `BRAVE_SEARCH_API_KEY` as a server-only environment variable. The browser never receives this key. Without it, the AI continues using connected company records and explicitly warns that live research was unavailable.
-- Brave Search API usage may incur provider charges according to the selected plan; keep the result count and number of searches bounded.
+- Configure `TAVILY_API_KEY` as a server-only environment variable. The browser never receives this key. Without it, the AI continues using connected company records and explicitly warns that live research was unavailable.
+- Tavily API usage may incur provider charges according to the selected plan; keep the result count and number of searches bounded.
 
 ## AI General Manager and chat persistence
 - The dashboard includes an AI General Manager chat surface.
@@ -47,12 +47,12 @@ Apply these migrations, in order, only to the new dedicated Business Command Cen
 6. `supabase/migrations/20261121000600_shared_company_ai_conversation.sql`
 7. `supabase/migrations/20261121000700_ai_action_approval_engine.sql`
 8. `supabase/migrations/20261121000800_task_management.sql`
-9. `supabase/migrations/20261121000900_service_role_data_api_grants.sql`
+9. `supabase/migrations/20261121000900_service_role_data_api_grants.sql`\n10. `supabase/migrations/20261121001000_private_rls_helpers.sql`\n11. `supabase/migrations/20261121001100_foreign_key_indexes.sql`\n12. `supabase/migrations/20261121001200_gmail_oauth_integrations.sql`
 
 Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
 
 ## Dashboard operational modules
-The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; CRM and project records support audited status updates, and projects can be linked to same-organisation clients and prospects and assigned to registered Samzy products. Prospects have a fit score, canonical website duplicate checks, transactional prospect-to-client conversion with source linkage and audit history, and organisation-scoped contact-point capture. Contact points are unverified by default; email addresses are normalised, and the AI context receives contact-channel verification counts without receiving the stored contact addresses. Product registry supports product registration. Sales & Outreach stores eligible drafts and supports owner/admin-initiated email delivery through the guarded Resend adapter; WhatsApp first-contact sending is not enabled. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003, 004 and 005 before the latest CRM and AI Manager features can load. The AI General Manager uses a single organisation-wide conversation and receives a bounded, read-only snapshot of recent prospects, clients, projects, approvals, outreach events, financial aggregates, recent AI runs and audit events, alongside approved company memory, current conversation and source-linked live research when configured. Snapshot records are organisation-scoped and timestamped; the assistant must distinguish loaded recent records from all-time totals and cannot claim access to activity outside connected systems.
+The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; CRM and project records support audited status updates, and projects can be linked to same-organisation clients and prospects and assigned to registered Samzy products. Prospects have a fit score, canonical website duplicate checks, transactional prospect-to-client conversion with source linkage and audit history, and organisation-scoped contact-point capture. Contact points are unverified by default; email addresses are normalised, and the AI context receives contact-channel verification counts without receiving the stored contact addresses. Product registry supports product registration. Sales & Outreach stores eligible drafts and supports owner/admin-initiated email delivery through the guarded Gmail adapter; WhatsApp first-contact sending is not enabled. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003, 004 and 005 before the latest CRM and AI Manager features can load. The AI General Manager uses a single organisation-wide conversation and receives a bounded, read-only snapshot of recent prospects, clients, projects, approvals, outreach events, financial aggregates, recent AI runs and audit events, alongside approved company memory, current conversation and source-linked live research when configured. Snapshot records are organisation-scoped and timestamped; the assistant must distinguish loaded recent records from all-time totals and cannot claim access to activity outside connected systems.
 
 ## Deployment boundary
 Vercel deployment and production environment configuration are intentionally deferred until the application code and verification pass are complete. At deployment time, add server-side provider keys and `SUPABASE_SERVICE_ROLE_KEY` as protected Vercel environment variables. Only the Supabase URL and anon/public key may be exposed to the browser.
@@ -62,7 +62,7 @@ Vercel deployment and production environment configuration are intentionally def
 - Build the production app with `npm run build`.
 - Install the Playwright Chromium browser with `npx playwright install chromium`.
 - Run dashboard browser tests with `npm run test:e2e`.
-- The automated suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, CRM and finance workflows, shared AI conversation history, controlled action execution, sales drafts, email-send UI behaviour and Resend adapter idempotency/error handling.
+- The automated suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, CRM and finance workflows, shared AI conversation history, controlled action execution, sales drafts, email-send UI behaviour and Gmail adapter idempotency/error handling.
 - Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
 
 
@@ -93,7 +93,7 @@ Contact-point verification is a recorded manual attestation by an owner or admin
 
 
 ## AI-to-approval handoff
-- The three-model synthesis may emit one structured proposal only when the user explicitly requests a supported company operation and the required details are present.
+- The five-model synthesis may emit one structured proposal only when the user explicitly requests a supported company operation and the required details are present.
 - The server strips the marker from the visible answer, validates the proposal against strict Zod schemas, links it to the originating AI run, and saves it as `pending_approval`.
 - A malformed, ambiguous or unsupported proposal is discarded with a warning. The AI cannot approve or execute its own proposal.
 - An owner or administrator must approve the request; the database transaction then rechecks role and organisation scope before executing the whitelisted operation.
@@ -105,9 +105,21 @@ Migration 009 explicitly grants the server-only `service_role` access to the exi
 
 
 ## Email and WhatsApp delivery
-- Email: owner/admin can send an eligible saved email draft through Resend at `POST /api/outreach/send`. Configure `RESEND_API_KEY`, `OUTREACH_FROM_EMAIL` (verified sender domain) and optionally `OUTREACH_REPLY_TO_EMAIL`.
+- Email: owner/admin can send an eligible saved email draft through Gmail at `POST /api/outreach/send`. Configure `GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET`, `GMAIL_EXPECTED_EMAIL` (verified sender domain) and optionally `GMAIL_TOKEN_ENCRYPTION_KEY`.
 - WhatsApp: owner/admin can send an eligible saved WhatsApp draft through Meta WhatsApp Cloud API at `POST /api/outreach/whatsapp/send`. Configure `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_NAME`, and `WHATSAPP_TEMPLATE_LANGUAGE`.
 - The approved Meta message template must contain exactly one body variable (`{{1}}`); the saved personalised message is supplied as that parameter. This endpoint sends template messages only, suitable for business-initiated conversations outside the 24-hour customer-service window. Meta template approval and policy eligibility are still enforced by Meta.
-- Both channels require owner/admin authorization, a CRM contact manually verified by an owner/admin, a recorded consent/source basis, suppression checks, contact frequency limits, an active-conversation check, an atomic draft claim and provider message ID recording. Ambiguous provider outcomes are marked `send_unknown`; never blindly resend them.
+- Both channels require owner/admin authorization, a CRM contact manually verified by an owner/admin, a recorded consent/source basis, suppression checks, contact frequency limits, an active-conversation check, an atomic draft claim and provider message ID recording. Ambiguous provider outcomes are marked `send_unknown`; never blindly gmail them.
 - No bulk blast or autonomous send is enabled. Each draft requires a deliberate send action. Inbound WhatsApp webhook verification, inbound message ingestion, automated reply drafting from webhook events and two-way conversation synchronisation are not yet implemented.
 - Configure `WHATSAPP_GRAPH_API_VERSION` to a Graph API version supported by your Meta app.
+
+
+## Five-provider AI, Tavily and Gmail integration
+- Five provider slots run independent analyses concurrently: Gemini, Groq, OpenRouter, OpenAI and Anthropic Claude. Each slot has its own provider, model, base URL and server-only API key. The orchestrator continues when individual providers fail and uses a configured surviving provider for synthesis.
+- Anthropic uses its native Messages API; the other four providers use their documented OpenAI-compatible endpoints.
+- Current default model IDs are configurable in Vercel and should be rechecked against provider model availability and account quotas before production use.
+- Tavily is the live research provider. Requests are bounded to eight results and snippets are treated as untrusted evidence.
+- Gmail OAuth requests read/modify and send permissions. Refresh tokens are encrypted with AES-256-GCM before being stored in the dedicated `gmail_integrations` table. The inbox can be synced for reply analysis, and outbound replies require an explicit owner/admin send action. AI never sends email autonomously.
+- Add the exact deployed callback URL `https://YOUR_DEPLOYMENT_HOST/api/integrations/gmail/callback` to the Google OAuth client's Authorized redirect URIs. Complete the Google consent flow from Settings after deployment.
+- The dashboard username is mapped server-side using `DASHBOARD_LOGIN_USERNAME` and `DASHBOARD_LOGIN_EMAIL`. The password is not an environment variable; it is verified by Supabase Auth. Create the owner account in Supabase Auth and set a strong password there. Do not use a password exposed in chat.
+- Required server-only variables include `SUPABASE_SERVICE_ROLE_KEY` and `GMAIL_TOKEN_ENCRYPTION_KEY`. The service-role key must never use a `NEXT_PUBLIC_` prefix.
+- The Gmail migration has been applied to the dedicated Business Command Centre database. Gmail mailbox authorization is not yet completed.
