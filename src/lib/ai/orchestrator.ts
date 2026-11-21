@@ -26,6 +26,7 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
         "Preserve the original objective. Identify agreement, meaningful disagreements, unsupported claims, and missing evidence.",
         "Do not treat majority agreement as proof. Do not invent facts or citations.",
         "Return: Executive answer; Evidence-backed findings; Disagreements/risks; Recommended next actions; Confidence and unknowns.",
+        "If and only if the original user explicitly requested one supported company operation and all required details are present, append exactly one [[SAMZY_ACTION_PROPOSAL]] JSON marker containing action_type, summary and a schema-valid payload. Never propose an action based only on a recommendation. Do not propose outreach delivery, payments, contracts, final prices or deletions. If details are missing, ask a question and omit the marker.",
       ].join(" "),
       context: {
         originalTask: request.task,
