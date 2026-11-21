@@ -78,7 +78,8 @@ test("all primary navigation controls open their corresponding workspace views",
     await page.getByRole("button", { name: new RegExp(section) }).first().click();
     await expect(page.locator(".crumb")).toContainText(section);
     if (section !== "Overview" && section !== "AI General Manager") {
-      await expect(page.getByRole("heading", { name: section })).toBeVisible();\n      await expect(page.getByText("Connect your company workspace to view live records.")).toBeVisible();
+      await expect(page.getByRole("heading", { name: section })).toBeVisible();
+      await expect(page.getByText("Connect your company workspace to view live records.")).toBeVisible();
     }
   }
 });
