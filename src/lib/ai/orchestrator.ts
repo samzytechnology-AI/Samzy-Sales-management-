@@ -3,18 +3,20 @@ import { SALES_CONVERSION_PLAYBOOK } from "./sales-playbook";
 import { SAMZY_BUSINESS_LIFECYCLE } from "../business/lifecycle-playbook";
 import { SAMZY_SERVICE_CATALOG, renderSamzyServiceDiscoveryRules } from "../business/service-catalog";
 
-/** Three independent agents share one objective; a second pass produces a unified synthesis. */
+/** Five independent provider agents share one objective; a second pass produces a unified synthesis. */
 export async function coordinateModels(request: ModelRequest, adapters: ModelAdapter[]): Promise<CoordinatedResult> {
-  if (adapters.length !== 3) throw new Error(`Exactly three model adapters are required; received ${adapters.length}.`);
-  if (new Set(adapters.map((adapter) => adapter.slot)).size !== 3) {
-    throw new Error("Model slots A, B and C must each be configured once.");
+  if (adapters.length < 1) throw new Error("At least one configured AI provider is required.");
+  if (new Set(adapters.map((adapter) => adapter.slot)).size !== adapters.length) {
+    throw new Error("Each configured model slot must appear only once.");
   }
 
-  const agentMandates = {
+  const agentMandates: Record<string, string> = {
     A: "ROLE: Prospect intelligence analyst. Verify business facts, customer journey, fit, reachable decision-maker and strongest evidence-backed commercial opportunity. Flag unknowns; do not write generic pitches.",
     B: "ROLE: Revenue strategist and conversion copywriter. Translate the verified opportunity into a credible business benefit and a short interest-first message. Model likely replies and concise next responses without claiming certainty.",
     C: "ROLE: Independent sales critic and deal coach. Challenge unsupported assumptions, assess objections and conversion friction, improve the message, and recommend the safest high-value next step.",
-  } as const;
+    D: "ROLE: Independent executive analyst. Challenge the proposed strategy, test operational feasibility, quantify risks where evidence permits, and identify the highest-leverage next action.",
+    E: "ROLE: Independent quality and evidence auditor. Check source support, identify contradictions, detect fabricated or overstated claims, and state what evidence is still missing.",
+  };
   const enrichedRequest: ModelRequest = {
     ...request,
     objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SALES_CONVERSION_PLAYBOOK, "Apply the end-to-end company operating lifecycle below.", SAMZY_BUSINESS_LIFECYCLE, "Use the official Samzy service catalogue and prospect-matching rules below. The structured catalogue is also supplied in context; treat it as the source of truth.", renderSamzyServiceDiscoveryRules()].join("\n\n"),
@@ -44,7 +46,7 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
   );
   if (!contributions.length) throw new Error(`All AI providers failed. ${warnings.join(" | ")}`);
 
-  const synthesizer = adapters.find((adapter) => adapter.slot === "C") ?? adapters[0];
+  const synthesizer = adapters.find((adapter) => adapter.slot === "D") ?? adapters.find((adapter) => adapter.slot === "E") ?? adapters.find((adapter) => adapter.slot === "C") ?? adapters[0];
   let synthesis: string;
   try {
     const result = await synthesizer.generate({
