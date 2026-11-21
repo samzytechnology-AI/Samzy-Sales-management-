@@ -60,11 +60,15 @@ const OPEN = "[[SAMZY_ACTION_PROPOSAL]]";
 const CLOSE = "[[/SAMZY_ACTION_PROPOSAL]]";
 
 /** Extract one strictly validated proposal. Invalid or malformed markers are removed and never executed. */
-export function extractAIActionProposal(content: string): {
+export function extractAIActionProposal(content: string, allowProposal = true): {
   cleanContent: string;
   proposal?: AIActionProposal;
   warning?: string;
 } {
+  if (!allowProposal) {
+    const containsProposal = content.includes(OPEN);
+    return { cleanContent: content.replace(/\[\[SAMZY_ACTION_PROPOSAL\]\][\s\S]*?(?:\[\[\/SAMZY_ACTION_PROPOSAL\]\]|$)/g, "").trim(), warning: containsProposal ? "The model synthesis was unavailable, so no action proposal was submitted." : undefined };
+  }
   const occurrences = content.split(OPEN).length - 1;
   if (occurrences === 0) return { cleanContent: content.trim() };
   if (occurrences > 1) return { cleanContent: content.replace(/\[\[SAMZY_ACTION_PROPOSAL\]\][\s\S]*?(?:\[\[\/SAMZY_ACTION_PROPOSAL\]\]|$)/g, "").trim(), warning: "The AI returned multiple action proposals. None were submitted." };
