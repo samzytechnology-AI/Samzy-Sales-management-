@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
 
 const patchSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("approval"), id: uuid, decision: z.enum(["approved","rejected"]), decision_note: z.string().trim().max(1000).optional() }),
+  z.object({ type: z.literal("convert_prospect"), prospect_id: uuid }),
   z.object({ type: z.literal("prospect"), id: uuid, status: z.enum(["discovered","researching","qualified","contacted","replied","opportunity","customer","disqualified"]) }),
   z.object({ type: z.literal("project"), id: uuid, status: z.enum(["planned","in_progress","blocked","review","delivered","cancelled"]) }),
   z.object({ type: z.literal("client"), id: uuid, status: z.enum(["active","inactive","on_hold"]) }),
@@ -126,6 +127,16 @@ export async function PATCH(request: NextRequest) {
     const auth = await authorize(request, true);
     if ("response" in auth) return auth.response;
     const input = patchSchema.parse(await request.json());
+
+    if (input.type === "convert_prospect") {
+      const { data: converted, error: conversionError } = await auth.db.rpc("convert_prospect_to_client", {
+        p_organization_id: auth.organizationId,
+        p_prospect_id: input.prospect_id,
+        p_actor_user_id: auth.user.id,
+      });
+      if (conversionError || !converted) return error("Prospect conversion failed. Confirm the CRM migration is applied and the prospect belongs to this company.", 409);
+      return NextResponse.json({ record: converted }, { headers: noStore });
+    }
 
     if (input.type === "approval") {
       if (!["owner","admin"].includes(auth.role)) return error("Only company owners or administrators can decide approvals.", 403);
