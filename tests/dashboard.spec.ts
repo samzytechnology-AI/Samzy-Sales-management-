@@ -39,6 +39,21 @@ async function connectMockWorkspace(page: import("@playwright/test").Page) {
     }
     if (request.method() === "PATCH") {
       const input = request.postDataJSON() as Record<string, any>;
+      if (input.type === "convert_prospect") {
+        const prospect = records.prospects.find(x => x.id === input.prospect_id);
+        if (!prospect) {
+          await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "Prospect not found" }) });
+          return;
+        }
+        prospect.status = "customer";
+        let client = records.clients.find(x => x.source_prospect_id === prospect.id);
+        if (!client) {
+          client = { id: `converted-${prospect.id}`, company_name: prospect.company_name, website_url: prospect.website_url, industry: prospect.industry, source_prospect_id: prospect.id, status: "active" };
+          records.clients.push(client);
+        }
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: client }) });
+        return;
+      }
       const key = input.type === "approval" ? "approvals" : input.type === "prospect" ? "prospects" : input.type === "project" ? "projects" : "clients";
       const item = records[key].find(x => x.id === input.id);
       if (item) item.status = input.type === "approval" ? input.decision : input.status;
@@ -222,4 +237,29 @@ test("authenticated company user can sign out", async ({ page }) => {
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.locator(".auth-text")).toContainText("Signed out securely.");
   await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+});
+
+test("CRM converts a prospect into one linked client and refreshes the workspace", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Leads & CRM/ }).click();
+  await page.getByPlaceholder("Company name").fill("Conversion Test Company");
+  await page.getByPlaceholder("Website URL (optional)").fill("https://conversion-test.example");
+  await page.getByRole("button", { name: "Save prospect" }).click();
+  await expect.poll(() => records.prospects.length).toBe(1);
+  const row = page.locator(".record-row").filter({ hasText: "Conversion Test Company" });
+  await row.getByRole("button", { name: "Convert to client" }).click();
+  await expect.poll(() => records.clients.length).toBe(1);
+  await expect.poll(() => records.prospects[0].status).toBe("customer");
+  expect(records.clients[0].source_prospect_id).toBe(records.prospects[0].id);
+  await page.locator("nav").getByRole("button", { name: /^Clients/ }).click();
+  await expect(page.getByText("Conversion Test Company")).toBeVisible();
+});
+
+test("overview displays live workspace totals instead of placeholder dashes", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  records.prospects.push({ id: "prospect-overview", company_name: "Overview Prospect", status: "qualified" });
+  records.clients.push({ id: "client-overview", company_name: "Overview Client", status: "active" });
+  await page.locator("nav").getByRole("button", { name: /^Overview/ }).click();
+  await expect(page.locator(".metrics")).toContainText("1");
+  await expect(page.locator(".metrics")).not.toContainText("CRM integration pending");
 });
