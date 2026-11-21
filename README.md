@@ -40,7 +40,7 @@ Apply these migrations, in order, only to the new dedicated Business Command Cen
 Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
 
 ## Dashboard operational modules
-The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; product registry and outreach history are read-only in the current dashboard UI. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003 and 004 before these live modules can load.
+The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; product registry supports product registration and outreach history is read-only in the current dashboard UI. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003 and 004 before these live modules can load.
 
 ## Deployment boundary
 Vercel deployment and production environment configuration are intentionally deferred until the application code and verification pass are complete. At deployment time, add server-side provider keys and `SUPABASE_SERVICE_ROLE_KEY` as protected Vercel environment variables. Only the Supabase URL and anon/public key may be exposed to the browser.
@@ -50,5 +50,5 @@ Vercel deployment and production environment configuration are intentionally def
 - Build the production app with `npm run build`.
 - Install the Playwright Chromium browser with `npx playwright install chromium`.
 - Run dashboard browser tests with `npm run test:e2e`.
-- The current browser suite covers all primary navigation items, the AI Manager call-to-action, quick commands, suggested prompts, chat submission and the disconnected-workspace sign-in state.
-- These tests verify interface behavior only. They do not prove live Supabase authentication, provider API calls, database persistence, real outbound delivery or production deployment.
+- The current browser suite covers primary navigation, AI Manager controls, secure sign-in error handling, mocked authenticated workspace access, and create/approval workflows for clients, products, finance and approval requests.
+- Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
