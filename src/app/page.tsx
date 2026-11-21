@@ -1,2 +1,137 @@
-const metrics = [{label:"Prospects discovered",value:"—",hint:"Awaiting connected research providers"},{label:"Active clients",value:"—",hint:"Awaiting CRM database"},{label:"Open projects",value:"—",hint:"Awaiting project registry"},{label:"Approvals required",value:"—",hint:"No live records loaded"}];
-export default function Home() { return <main className="shell"><header className="topbar"><div className="brand"><div className="mark">S</div><div><strong>samzytechnology</strong><div className="muted" style={{fontSize:12}}>BUSINESS COMMAND CENTRE</div></div></div><span className="status">● Foundation workspace</span></header><section className="hero"><div><div className="eyebrow">One company. One intelligence layer.</div><h1>Your business, in one command centre.</h1><p>Coordinate sales, clients, projects, product generators and company operations through one intelligent workspace. Three AI providers will collaborate around shared company context and policies.</p></div><span className="pill warning">Setup in progress · Not production-connected</span></section><section className="grid">{metrics.map((item)=><article className="metric" key={item.label}><span>{item.label}</span><strong>{item.value}</strong><small>{item.hint}</small></article>)}</section><section className="section two"><article className="panel"><h2>AI collaboration layer</h2><p className="note">All three configured models receive the same objective and context concurrently. Their contributions return to one shared workflow. Provider credentials and model selections have not yet been configured.</p>{["Model A · Shared task contributor","Model B · Shared task contributor","Model C · Shared task contributor"].map((name)=><div className="model-row" key={name}><span>{name}</span><span className="pill">Not connected</span></div>)}<p className="note" style={{marginTop:12}}>The orchestration interface is implemented. Live model execution requires provider adapters, API credentials and integration tests.</p></article><article className="panel"><h2>Business safeguards</h2><div className="feature"><b>Pricing floors</b><span className="note">Landing page ₦100,000 · E-commerce ₦150,000 · School Management System ₦350,000</span></div><div className="feature"><b>Negotiation pricing</b><span className="note">Configurable asking-price margin; final prices require your approval.</span></div><div className="feature"><b>Anti-spam controls</b><span className="note">Shared suppression, frequency checks, deduplication and approval-first outreach.</span></div><div className="feature"><b>Independent products</b><span className="note">Products are registered and integrated, not rebuilt inside this command centre.</span></div></article></section><section className="section panel"><h2>Talk to your Samzy AI General Manager</h2><p className="note">The command interface is reserved here. It will read authorised company records, remember approved business policies and execute permitted actions. It is not connected to a live model or company database yet, so it will not fabricate operational answers.</p><div className="command"><input disabled placeholder="AI manager chat will be enabled after model and database setup..." /><button disabled style={{opacity:.45,cursor:"not-allowed"}}>Send</button></div><p className="note">Next integrations: dedicated Supabase project · three model providers · CRM and persistent memory · WhatsApp Business · corporate email · product registry.</p></section><footer className="footer">SAMZY TECHNOLOGY · INTERNAL OPERATING PLATFORM · BUILD 0.1.0</footer></main>; }
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+
+type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; outboundEnabled?: boolean };
+type ChatMessage = { role: "user" | "assistant"; content: string; id: number };
+
+function getBrowserSupabase(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  return url && key ? createClient(url, key) : null;
+}
+
+const nav = [
+  ["⌂","Overview"],["✳","AI General Manager"],["◎","Leads & CRM"],["♙","Clients"],
+  ["▣","Projects"],["⌘","Product Registry"],["↗","Sales & Outreach"],["✓","Approvals"],
+  ["₦","Finance"],["⚙","Settings"],
+];
+
+const starters = [
+  "Give me a complete briefing on the company.",
+  "What should the company prioritise today?",
+  "Review our sales opportunities and identify gaps.",
+  "Prepare a human, personalised outreach draft. Do not send it.",
+];
+
+export default function Home() {
+  const [active,setActive] = useState("Overview");
+  const [health,setHealth] = useState<Health|null>(null);
+  const [email,setEmail] = useState("");
+  const [password,setPassword] = useState("");
+  const [orgId,setOrgId] = useState("");
+  const [token,setToken] = useState("");
+  const [authText,setAuthText] = useState("");
+  const [draft,setDraft] = useState("");
+  const [busy,setBusy] = useState(false);
+  const [messages,setMessages] = useState<ChatMessage[]>([
+    {id:1,role:"assistant",content:"Welcome to the Samzy Technology command centre. I am your AI General Manager interface. Connect the secure company workspace to begin. I can help analyse operations, prepare plans, research opportunities and draft client communications. I will clearly distinguish verified company information from anything that is not yet connected."}
+  ]);
+
+  useEffect(()=>{
+    fetch("/api/health",{cache:"no-store"}).then(r=>r.json()).then(setHealth).catch(()=>setHealth(null));
+    const client=getBrowserSupabase();
+    if(client) client.auth.getSession().then(({data})=>{if(data.session?.access_token)setToken(data.session.access_token);});
+  },[]);
+
+  async function signIn(e:FormEvent){
+    e.preventDefault(); setAuthText("");
+    const client=getBrowserSupabase();
+    if(!client){setAuthText("Supabase browser authentication is not configured. Add the public Supabase URL and anon key to the environment.");return;}
+    if(!orgId.trim()){setAuthText("Enter the Business Command Centre organisation UUID.");return;}
+    const {data,error}=await client.auth.signInWithPassword({email,password});
+    if(error||!data.session){setAuthText(error?.message??"Sign-in failed.");return;}
+    setToken(data.session.access_token); setAuthText("Secure session connected.");
+  }
+
+  async function send(text?:string){
+    const question=(text??draft).trim();
+    if(!question||busy)return;
+    setMessages(old=>[...old,{id:Date.now(),role:"user",content:question}]);
+    setDraft(""); setBusy(true);
+    if(!token||!orgId.trim()){
+      setMessages(old=>[...old,{id:Date.now()+1,role:"assistant",content:"I have received your instruction, but the secure company workspace is not connected. Sign in and enter the organisation UUID first. I will not invent company records or pretend an action has been completed."}]);
+      setBusy(false);return;
+    }
+    try{
+      const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({
+        task:"business_advice",objective:question,
+        context:{
+          product:"Samzy Business Command Centre",
+          company:"Samzy Technology Limited",
+          conversationHistory:messages.slice(-12).map(m=>({role:m.role,content:m.content})),
+          mandatoryRules:[
+            "Act as the company's internal AI General Manager.",
+            "Use approved company memory and verified evidence; state when requested data is unavailable.",
+            "For all client-facing communication, speak only as Samzy Technology Limited. Never reveal or insert the founder's personal name.",
+            "Humanize all client-facing writing: natural, warm, specific, thoughtful, concise and professionally conversational. Avoid robotic or generic AI language.",
+            "Do not claim CAC registration, incorporation or legal status without verified approved company records.",
+            "Classify instructions as information, analysis, draft or action. Never claim an action was executed unless a permitted tool confirms it.",
+            "Require explicit human approval before external messages, final pricing, contracts, payments, deletions or irreversible actions."
+          ]
+        }
+      })});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error??"The AI service could not complete the request.");
+      const answer=[result.synthesis,result.warnings?.length?"\n\nWarnings: "+result.warnings.join("; "):""].join("");
+      setMessages(old=>[...old,{id:Date.now()+2,role:"assistant",content:answer||"The AI service returned no synthesis."}]);
+    }catch(err){
+      setMessages(old=>[...old,{id:Date.now()+3,role:"assistant",content:err instanceof Error?err.message:"Unable to reach the AI service."}]);
+    }finally{setBusy(false);}
+  }
+
+  const providers=health?.providers??[];
+  const ready=health?.aiReady===true;
+  const isChat=active==="AI General Manager";
+
+  return <main className="app-shell">
+    <aside className="sidebar">
+      <div className="brand"><div className="brand-mark">S</div><div><b>samzy<span>technology</span></b><small>BUSINESS COMMAND CENTRE</small></div></div>
+      <div className="nav-label">COMPANY WORKSPACE</div>
+      <nav>{nav.map(([icon,label])=><button key={label} onClick={()=>setActive(label)} className={active===label?"nav-link selected":"nav-link"}><span>{icon}</span>{label}{label==="Approvals"?<i className="nav-indicator"/>:null}</button>)}</nav>
+      <div className="sidebar-bottom"><div className="secure-note"><span>⌑</span><div><b>Company-first security</b><small>Private workspace · Approval-led</small></div></div><div className="company-user"><div className="avatar">ST</div><div><b>Samzy Technology Limited</b><small>Company workspace</small></div></div></div>
+    </aside>
+    <section className="main">
+      <header className="topbar"><div className="crumb">Samzy Technology Limited <span>/</span> <b>{active}</b></div><div className="top-actions"><span className={ready?"health good":"health"}><i/>{ready?"AI SYSTEM READY":"SETUP IN PROGRESS"}</span><span className="avatar small">ST</span></div></header>
+      <div className="content">
+        <section className="welcome"><div><div className="eyebrow">COMPANY OPERATIONS · COMMAND CENTRE</div><h1>{isChat?"Your AI General Manager.":"Good morning. Let's build."}</h1><p>{isChat?"One conversation for company intelligence, planning and controlled execution.":"Your business at a glance. Intelligence, operations and execution in one place."}</p></div><button className="primary" onClick={()=>setActive("AI General Manager")}>✳ &nbsp;Talk to AI Manager</button></section>
+        {active==="Overview"?<>
+          <section className="metrics">
+            {[
+              ["Pipeline prospects","—","CRM integration pending","◎","blue"],
+              ["Active clients","—","Verified client records","♙","violet"],
+              ["Projects in progress","—","Across connected products","▣","cyan"],
+              ["Revenue tracked","—","Recorded company income","₦","green"]
+            ].map(([label,value,sub,icon,color])=><article className="metric" key={label}><div className="metric-head"><span>{label}</span><i className={`metric-icon ${color}`}>{icon}</i></div><strong>{value}</strong><small>{sub}</small></article>)}
+          </section>
+          <section className="dashboard-grid">
+            <article className="panel intelligence"><div className="panel-head"><div><div className="eyebrow">CENTRAL INTELLIGENCE</div><h2>AI collaboration layer</h2></div><span className={ready?"chip good":"chip"}>{providers.filter(p=>p.configured).length}/3 models connected</span></div><p className="muted">Three coordinated AI providers working toward one company objective, with shared approved memory and a single synthesis.</p><div className="provider-list">{["A","B","C"].map(slot=>{const p=providers.find(x=>x.slot===slot);return <div className="provider" key={slot}><span className="provider-letter">{slot}</span><div><b>Model {slot} · {p?.provider??"Provider pending"}</b><small>{p?.model??"Configure provider and model credentials"}</small></div><em className={p?.configured?"connected":""}>{p?.configured?"Connected":"Not connected"}</em></div>})}</div><button className="inline-action" onClick={()=>setActive("AI General Manager")}>Open AI General Manager ↗</button></article>
+            <article className="panel quick"><div className="eyebrow">MOVE THE BUSINESS FORWARD</div><h2>Quick commands</h2>{[
+              ["⌕","Research new prospects","Find and qualify Nigerian businesses","Research new Nigerian businesses that could need our services. Do not contact anyone."],
+              ["▣","Review company projects","Progress, blockers and next steps","Give me a summary of active projects, blockers and next steps."],
+              ["✉","Draft client outreach","Human, company-branded and approval-first","Prepare a personalised, human outreach draft for a researched prospect. Do not send it."],
+              ["✓","Review pending approvals","Decisions that need company approval","Show me pending company decisions and approvals."]
+            ].map(([ico,title,desc,command])=><button className="quick-row" key={title} onClick={()=>{setActive("AI General Manager");setDraft(command);}}><i>{ico}</i><span><b>{title}</b><small>{desc}</small></span><em>↗</em></button>)}</article>
+          </section>
+          <section className="lower-grid"><article className="panel"><div className="eyebrow">COMPANY PULSE</div><h2>Operations overview</h2><div className="empty"><span>⌁</span><b>Your verified company activity will appear here</b><p>CRM, projects, finance and product integrations will populate this area with actual company records.</p></div></article><article className="panel"><div className="eyebrow">CONNECTED ECOSYSTEM</div><h2>Product registry</h2>{[["SC","Samzy School Cloud","Independent product · Integration pending"],["WS","Samzy Website Studio","Product registry slot"],["AS","Samzy App Studio","Product registry slot"]].map(([code,name,desc])=><div className="product" key={code}><span>{code}</span><div><b>{name}</b><small>{desc}</small></div><em>Pending</em></div>)}</article></section>
+        </>:active==="AI General Manager"?<section className="chat-panel">
+          <div className="chat-title"><div><div className="eyebrow">THE COMPANY'S INTELLIGENCE PARTNER</div><h2>Talk to your AI General Manager</h2><p>Ask questions, give instructions, plan and analyse company operations.</p></div><span className="chip">⌑ Private company workspace</span></div>
+          <div className="chat-body"><div className="messages">{messages.map(m=><div className={m.role==="user"?"message mine":"message"} key={m.id}><span className="message-avatar">{m.role==="user"?"ST":"✳"}</span><div><b>{m.role==="user"?"Samzy Technology Limited":"AI General Manager"}</b><p>{m.content}</p></div></div>)}{busy?<div className="working">The company intelligence team is working…</div>:null}</div><form className="composer" onSubmit={e=>{e.preventDefault();void send();}}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Ask your AI General Manager anything, or give it a command…" rows={2}/><div><small>Enter to send · Shift + Enter for a new line</small><button className="primary" disabled={busy||!draft.trim()}>Send command ↗</button></div></form></div>
+          <aside className="chat-side"><article className="connect"><h3>Connect company workspace</h3><p>Secure administrator sign-in</p><form onSubmit={signIn}><label>Company email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@company.com" required/><label>Password</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Workspace password" required/><label>Organisation UUID</label><input value={orgId} onChange={e=>setOrgId(e.target.value)} placeholder="Business workspace ID" required/><button className="connect-button">{token?"Refresh session":"Connect workspace"}</button></form>{authText?<p className="auth-text">{authText}</p>:null}<small>Password authentication is handled by Supabase Auth. The dashboard does not store your password.</small></article><article className="suggest"><h3>Try asking</h3>{starters.map(s=><button key={s} onClick={()=>void send(s)}>{s}<span>↗</span></button>)}</article></aside>
+        </section>:<section className="panel coming"><div className="eyebrow">WORKSPACE MODULE</div><h2>{active}</h2><p>This module is part of the company operating system. Its live records and actions will appear here as the corresponding backend services are implemented and verified.</p><button className="primary" onClick={()=>setActive("AI General Manager")}>Discuss this module with AI Manager ↗</button></section>}
+        <footer><span>© Samzy Technology Limited</span><span>INTERNAL COMPANY PLATFORM · BUILD 0.2.0</span><span>⌑ Company-first workspace</span></footer>
+      </div>
+    </section>
+  </main>;
+}
