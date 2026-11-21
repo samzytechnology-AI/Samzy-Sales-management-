@@ -108,7 +108,8 @@ test("chat composer accepts text and reports the disconnected workspace honestly
   await expect(page.locator(".messages")).toContainText("secure company workspace is not connected");
 });
 
-test("workspace sign-in reports invalid credentials from Supabase", async ({ page }) => {\n  await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "invalid_credentials", message: "Invalid login credentials" }) }));
+test("workspace sign-in reports invalid credentials from Supabase", async ({ page }) => {
+  await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "invalid_credentials", message: "Invalid login credentials" }) }));
   await page.goto("/");
   await page.getByRole("button", { name: /Talk to AI Manager/ }).click();
   await page.getByLabel("Company email").fill("admin@example.com");
