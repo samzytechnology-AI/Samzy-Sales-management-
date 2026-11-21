@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     const auth = await authorize(request);
     if ("response" in auth) return auth.response;
     const { data, error } = await auth.db.from("ai_action_requests")
-      .select("id,action_type,summary,payload,status,requested_by,approved_by,created_at,expires_at,decided_at,execution_result,failure_reason")
+      .select("id,action_type,summary,payload,status,requested_by,approved_by,ai_run_id,created_at,expires_at,decided_at,execution_result,failure_reason")
       .eq("organization_id", auth.organizationId)
       .order("created_at", { ascending: false }).limit(100);
     if (error) throw new Error("Could not load AI action requests. Confirm the action-engine migration is applied.");
