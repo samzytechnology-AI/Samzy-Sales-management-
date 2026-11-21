@@ -6,6 +6,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; outboundEnabled?: boolean };
 type ChatMessage = { role: "user" | "assistant"; content: string; id: number; actorUserId?: string | null };
 type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[]; contactPoints?: any[] };
+type AIAction = { id:string; action_type:string; summary:string; payload:Record<string,unknown>; status:string; requested_by:string; created_at:string; expires_at:string; execution_result?:Record<string,unknown>|null; failure_reason?:string|null };
 
 function getBrowserSupabase(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -34,6 +35,9 @@ export default function Home() {
   const [workspaceError,setWorkspaceError] = useState("");
   const [saveBusy,setSaveBusy] = useState(false);
   const [statusDrafts,setStatusDrafts] = useState<Record<string,string>>({});
+  const [aiActions,setAiActions] = useState<AIAction[]>([]);
+  const [actionsBusy,setActionsBusy] = useState(false);
+  const [actionDraft,setActionDraft] = useState({company_name:"",website_url:"",industry:"",country:"Nigeria",fit_score:"70",research_summary:""});
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [orgId,setOrgId] = useState("");
@@ -77,6 +81,17 @@ export default function Home() {
     return ()=>{cancelled=true;};
   },[token,orgId,active]);
 
+  useEffect(()=>{
+    if(active!=="Approvals"||!token||!orgId.trim())return;
+    let cancelled=false;
+    setActionsBusy(true);
+    fetch("/api/actions",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"})
+      .then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error??"AI action requests could not be loaded.");return data;})
+      .then(data=>{if(!cancelled)setAiActions(data.actions??[]);})
+      .catch(err=>{if(!cancelled)setWorkspaceError(err instanceof Error?err.message:"AI action requests could not be loaded.");})
+      .finally(()=>{if(!cancelled)setActionsBusy(false);});
+    return ()=>{cancelled=true;};
+  },[active,token,orgId]);
   async function submitModuleForm(event:FormEvent<HTMLFormElement>, type:"client"|"project"|"prospect"|"contact_point"|"finance"|"approval"|"product"){
     event.preventDefault();if(!token||!orgId.trim()||saveBusy)return;
     const form=event.currentTarget;
@@ -142,6 +157,41 @@ export default function Home() {
     finally{setSaveBusy(false);}
   }
 
+  async function proposeProspectAction(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();if(!token||!orgId.trim()||saveBusy)return;
+    setSaveBusy(true);setWorkspaceError("");
+    try{
+      const payload:Record<string,unknown>={company_name:actionDraft.company_name,country:actionDraft.country};
+      if(actionDraft.website_url)payload.website_url=actionDraft.website_url;
+      if(actionDraft.industry)payload.industry=actionDraft.industry;
+      if(actionDraft.fit_score)payload.fit_score=Number(actionDraft.fit_score);
+      if(actionDraft.research_summary)payload.research_summary=actionDraft.research_summary;
+      const response=await fetch("/api/actions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},body:JSON.stringify({actionType:"create_prospect",summary:"Add prospect: "+actionDraft.company_name,payload,idempotencyKey:crypto.randomUUID()})});
+      const result=await response.json();if(!response.ok)throw new Error(result.error??"Action proposal could not be saved.");
+      setActionDraft({company_name:"",website_url:"",industry:"",country:"Nigeria",fit_score:"70",research_summary:""});
+      const refreshed=await fetch("/api/actions",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
+      const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Proposal saved but action list refresh failed.");
+      setAiActions(data.actions??[]);
+    }catch(err){setWorkspaceError(err instanceof Error?err.message:"Action proposal failed.");}
+    finally{setSaveBusy(false);}
+  }
+
+  async function reviewAIAction(id:string,decision:"approved"|"rejected"){
+    if(!token||!orgId.trim()||saveBusy)return;
+    setSaveBusy(true);setWorkspaceError("");
+    try{
+      const response=await fetch("/api/actions",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},body:JSON.stringify({id,decision})});
+      const result=await response.json();if(!response.ok)throw new Error(result.error??"AI action could not be reviewed.");
+      const refreshed=await fetch("/api/actions",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
+      const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Decision saved but action list refresh failed.");
+      setAiActions(data.actions??[]);
+      if(decision==="approved"&&result.result?.status==="executed"){
+        const workspaceResponse=await fetch("/api/workspace?module=overview",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
+        const workspaceData=await workspaceResponse.json();if(workspaceResponse.ok)setWorkspace(workspaceData);
+      }
+    }catch(err){setWorkspaceError(err instanceof Error?err.message:"AI action review failed.");}
+    finally{setSaveBusy(false);}
+  }
   function naira(value:number){return new Intl.NumberFormat("en-NG",{style:"currency",currency:"NGN",maximumFractionDigits:0}).format(value??0);}
 
   async function signIn(e:FormEvent){
@@ -260,7 +310,7 @@ export default function Home() {
             </>:null}
             {active==="Product Registry"?<><form className="record-form" onSubmit={e=>void submitModuleForm(e,"product")}><h3>Register a Samzy product</h3><input name="product_name" placeholder="Product name" required/><input name="product_key" placeholder="Unique key (lowercase, hyphens)" pattern="[a-z0-9-]+" required/><input name="dashboard_url" type="url" placeholder="Dashboard URL (optional)"/><select name="integration_mode" defaultValue="manual"><option value="manual">Manual</option><option value="api">API</option><option value="webhook">Webhook</option><option value="oauth">OAuth</option></select><input name="capabilities" placeholder="Capabilities, comma-separated"/><button className="primary" disabled={saveBusy}>Register product</button></form><div className="record-list">{(workspace?.products??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.product_name}</b><small>{item.product_key} · {item.integration_mode} · {item.dashboard_url??"No dashboard URL"}</small></div><span className="record-status">{item.health_status}</span></div>)}{!workspace?.products?.length?<p className="empty">No registered products yet.</p>:null}</div></>:null}
             {active==="Sales & Outreach"?<><div className="module-note">External messaging is disabled until approved channel integrations, consent checks and communication controls are configured. This view is read-only.</div><div className="record-list">{(workspace?.outreach??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.direction} · {item.channel} · {item.recipient}</b><small>{item.body??"No message preview"} · {item.created_at?new Date(item.created_at).toLocaleString():""}</small></div><span className="record-status">{item.status}</span></div>)}{!workspace?.outreach?.length?<p className="empty">No outreach events recorded.</p>:null}</div></>:null}
-            {active==="Approvals"?<><form className="record-form" onSubmit={e=>void submitModuleForm(e,"approval")}><h3>Request an approval</h3><input name="title" placeholder="Approval title" required/><select name="category" defaultValue="other"><option value="outreach">Outreach</option><option value="pricing">Pricing</option><option value="contract">Contract</option><option value="payment">Payment</option><option value="delivery">Delivery</option><option value="other">Other</option></select><textarea name="description" placeholder="What needs approval and why?" required/><button type="submit" className="primary" disabled={saveBusy}>Submit for approval</button></form><div className="record-list">{(workspace?.approvals??[]).map(item=><div className="record-row approval-row" key={item.id}><div><b>{item.title}</b><small>{item.category} · {item.description}</small></div><div className="approval-actions"><span className="record-status">{item.status}</span>{item.status==="pending"?<><button disabled={saveBusy} onClick={()=>void decideApproval(item.id,"approved")}>Approve</button><button disabled={saveBusy} onClick={()=>void decideApproval(item.id,"rejected")}>Reject</button></>:null}</div></div>)}{!workspace?.approvals?.length?<p className="empty">No approval requests are waiting.</p>:null}</div></>:null}
+            {active==="Approvals"?<><form className="record-form" onSubmit={e=>void submitModuleForm(e,"approval")}><h3>Request an approval</h3><input name="title" placeholder="Approval title" required/><select name="category" defaultValue="other"><option value="outreach">Outreach</option><option value="pricing">Pricing</option><option value="contract">Contract</option><option value="payment">Payment</option><option value="delivery">Delivery</option><option value="other">Other</option></select><textarea name="description" placeholder="What needs approval and why?" required/><button type="submit" className="primary" disabled={saveBusy}>Submit for approval</button></form><div className="record-list">{(workspace?.approvals??[]).map(item=><div className="record-row approval-row" key={item.id}><div><b>{item.title}</b><small>{item.category} · {item.description}</small></div><div className="approval-actions"><span className="record-status">{item.status}</span>{item.status==="pending"?<><button disabled={saveBusy} onClick={()=>void decideApproval(item.id,"approved")}>Approve</button><button disabled={saveBusy} onClick={()=>void decideApproval(item.id,"rejected")}>Reject</button></>:null}</div></div>)}{!workspace?.approvals?.length?<p className="empty">No approval requests are waiting.</p>:null}</div><form className="record-form" onSubmit={e=>void proposeProspectAction(e)}><h3>Propose an AI-assisted CRM action</h3><p className="muted">This creates a pending proposal. It will not change the CRM until an owner or administrator approves it.</p><input value={actionDraft.company_name} onChange={e=>setActionDraft(old=>({...old,company_name:e.target.value}))} placeholder="Prospect company name" required/><input type="url" value={actionDraft.website_url} onChange={e=>setActionDraft(old=>({...old,website_url:e.target.value}))} placeholder="Website URL (optional)"/><input value={actionDraft.industry} onChange={e=>setActionDraft(old=>({...old,industry:e.target.value}))} placeholder="Industry"/><input value={actionDraft.country} onChange={e=>setActionDraft(old=>({...old,country:e.target.value}))} placeholder="Country"/><input type="number" min="0" max="100" value={actionDraft.fit_score} onChange={e=>setActionDraft(old=>({...old,fit_score:e.target.value}))} aria-label="Prospect fit score"/><textarea value={actionDraft.research_summary} onChange={e=>setActionDraft(old=>({...old,research_summary:e.target.value}))} placeholder="Research notes (optional)"/><button className="primary" disabled={saveBusy||!actionDraft.company_name.trim()}>Submit action for approval</button></form><div className="record-list"><h3>AI action requests</h3>{actionsBusy?<p className="empty">Loading action requests…</p>:null}{aiActions.map(action=><div className="record-row approval-row" key={action.id}><div><b>{action.summary}</b><small>{action.action_type.replaceAll("_"," ")} · Requested {new Date(action.created_at).toLocaleString()} · Expires {new Date(action.expires_at).toLocaleString()}{action.failure_reason?" · "+action.failure_reason:""}{action.execution_result?.record_id?" · Record "+String(action.execution_result.record_id):""}</small></div><div className="approval-actions"><span className="record-status">{action.status.replaceAll("_"," ")}</span>{action.status==="pending_approval"?<><button disabled={saveBusy} onClick={()=>void reviewAIAction(action.id,"approved")}>Approve & execute</button><button disabled={saveBusy} onClick={()=>void reviewAIAction(action.id,"rejected")}>Reject</button></>:null}</div></div>)}{!actionsBusy&&!aiActions.length?<p className="empty">No AI action proposals yet.</p>:null}</div></>:null}
             {active==="Finance"?<>
               <div className="finance-summary"><div><small>Income recorded</small><b>{naira(workspace?.summary?.incomeNgn??0)}</b></div><div><small>Expenses recorded</small><b>{naira(workspace?.summary?.expensesNgn??0)}</b></div><div><small>Net recorded</small><b>{naira(workspace?.summary?.netNgn??0)}</b></div></div>
               <form className="record-form" onSubmit={e=>void submitModuleForm(e,"finance")}><h3>Record a transaction</h3><select name="direction" defaultValue="income"><option value="income">Income</option><option value="expense">Expense</option></select><input name="category" placeholder="Category" required/><input name="description" placeholder="Description" required/><input name="amount_ngn" type="number" min="1" step="1" placeholder="Amount in NGN" required/><select name="status" defaultValue="recorded"><option value="recorded">Recorded</option><option value="pending">Pending</option></select><input name="occurred_at" type="date" aria-label="Transaction date"/><button className="primary" disabled={saveBusy}>Save transaction</button></form>
