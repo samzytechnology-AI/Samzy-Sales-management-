@@ -194,7 +194,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const proposalExtraction = extractAIActionProposal(result.synthesis);
+    const synthesisAvailable = !result.warnings.some(warning => warning.startsWith("Synthesis pass failed"));
+    const proposalExtraction = extractAIActionProposal(result.synthesis, synthesisAvailable);
     const runWarnings = [...result.warnings];
     if (proposalExtraction.warning) runWarnings.push(proposalExtraction.warning);
     const cleanSynthesis = proposalExtraction.cleanContent || "The AI did not return a user-facing synthesis.";
