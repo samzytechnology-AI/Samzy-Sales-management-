@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { evaluateOutreach } from "@/lib/outreach/policy";
-import { GmailDeliveryError, sendEmailWithGmail } from "@/lib/outreach/gmail";\nimport { getGmailAccessToken } from "@/lib/gmail/tokens";
+import { GmailDeliveryError, sendEmailWithGmail } from "@/lib/outreach/gmail";
+import { getGmailAccessToken } from "@/lib/gmail/tokens";
 
 export const runtime = "nodejs";
 const uuid = z.string().uuid();
