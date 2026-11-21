@@ -112,6 +112,19 @@ export default function Home() {
     finally{setSaveBusy(false);}
   }
 
+  async function convertProspectToClient(prospectId:string){
+    if(!token||!orgId.trim()||saveBusy)return;
+    setSaveBusy(true);setWorkspaceError("");
+    try{
+      const response=await fetch("/api/workspace",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({type:"convert_prospect",prospect_id:prospectId})});
+      const result=await response.json();if(!response.ok)throw new Error(result.error??"Prospect conversion failed.");
+      const refreshed=await fetch("/api/workspace?module=overview",{headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"});
+      const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Client created, but workspace refresh failed.");
+      setWorkspace(data);
+    }catch(err){setWorkspaceError(err instanceof Error?err.message:"Prospect conversion failed.");}
+    finally{setSaveBusy(false);}
+  }
+
   async function updateRecordStatus(type:"prospect"|"project"|"client",id:string,status:string){
     if(!token||!orgId.trim()||saveBusy)return;
     setSaveBusy(true);setWorkspaceError("");
@@ -232,7 +245,7 @@ export default function Home() {
           {token&&orgId.trim()&&!workspaceBusy?<>
             {active==="Leads & CRM"?<>
               <form className="record-form" onSubmit={e=>void submitModuleForm(e,"prospect")}><h3>Add a prospect</h3><input name="company_name" placeholder="Company name" required/><input name="website_url" type="url" placeholder="Website URL (optional)"/><input name="industry" placeholder="Industry"/><input name="country" placeholder="Country"/><textarea name="research_summary" placeholder="Research notes / evidence summary"/><button className="primary" disabled={saveBusy}>Save prospect</button></form>
-              <div className="record-list">{(workspace?.prospects??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.company_name}</b><small>{item.industry??"Industry not recorded"} · {item.country??"Country unknown"} · {item.website_url??"No website"}</small></div><div className="status-editor"><span className="record-status">{item.status}</span><select aria-label={`Status for ${item.company_name}`} value={statusDrafts[item.id]??item.status} onChange={e=>setStatusDrafts(old=>({...old,[item.id]:e.target.value}))}><option value="discovered">Discovered</option><option value="researching">Researching</option><option value="qualified">Qualified</option><option value="contacted">Contacted</option><option value="replied">Replied</option><option value="opportunity">Opportunity</option><option value="customer">Customer</option><option value="disqualified">Disqualified</option></select><button disabled={saveBusy||!statusDrafts[item.id]||statusDrafts[item.id]===item.status} onClick={()=>void updateRecordStatus("prospect",item.id,statusDrafts[item.id])}>Save status</button></div></div>)}{!workspace?.prospects?.length?<p className="empty">No prospect records yet.</p>:null}</div>
+              <div className="record-list">{(workspace?.prospects??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.company_name}</b><small>{item.industry??"Industry not recorded"} · {item.country??"Country unknown"} · {item.website_url??"No website"}</small></div><div className="status-editor"><span className="record-status">{item.status}</span><select aria-label={`Status for ${item.company_name}`} value={statusDrafts[item.id]??item.status} onChange={e=>setStatusDrafts(old=>({...old,[item.id]:e.target.value}))}><option value="discovered">Discovered</option><option value="researching">Researching</option><option value="qualified">Qualified</option><option value="contacted">Contacted</option><option value="replied">Replied</option><option value="opportunity">Opportunity</option><option value="customer">Customer</option><option value="disqualified">Disqualified</option></select><button disabled={saveBusy||!statusDrafts[item.id]||statusDrafts[item.id]===item.status} onClick={()=>void updateRecordStatus("prospect",item.id,statusDrafts[item.id])}>Save status</button>{item.status!=="customer"?<button disabled={saveBusy} onClick={()=>void convertProspectToClient(item.id)}>Convert to client</button>:null}</div></div>)}{!workspace?.prospects?.length?<p className="empty">No prospect records yet.</p>:null}</div>
             </>:null}
             {active==="Clients"?<>
               <form className="record-form" onSubmit={e=>void submitModuleForm(e,"client")}><h3>Add a client</h3><input name="company_name" placeholder="Company / client name" required/><input name="primary_contact_name" placeholder="Primary contact (optional)"/><input name="email" type="email" placeholder="Business email"/><input name="phone" placeholder="Phone"/><input name="website_url" type="url" placeholder="Website URL"/><input name="industry" placeholder="Industry"/><textarea name="notes" placeholder="Client notes"/><button className="primary" disabled={saveBusy}>Save client</button></form>
