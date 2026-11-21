@@ -168,6 +168,7 @@ export async function POST(request: NextRequest) {
       organization_id: organizationId,
       conversation_id: conversationId,
       role: "user",
+      actor_user_id: authData.user.id,
       content: body.objective,
     });
     if (userMessageError) throw new Error("Could not save your message to company history.");
@@ -285,7 +286,7 @@ export async function GET(request: NextRequest) {
 
     const { data: messages, error: messagesError } = await supabase
       .from("ai_messages")
-      .select("id,role,content,created_at")
+      .select("id,role,actor_user_id,content,created_at")
       .eq("organization_id", organizationId)
       .eq("conversation_id", conversation.id)
       .order("created_at", { ascending: true })
