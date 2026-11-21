@@ -1,5 +1,6 @@
 import type { ModelSlot } from "./types";
 import { createOpenAICompatibleAdapter, type OpenAICompatibleConfig } from "./openai-compatible";
+import { createAnthropicAdapter } from "./anthropic";
 
 export interface ProviderSlotConfig {
   slot: ModelSlot;
@@ -9,36 +10,44 @@ export interface ProviderSlotConfig {
   configured: boolean;
 }
 
+const SLOTS = ["A", "B", "C", "D", "E"] as const;
 const DEFAULT_BASE_URLS: Record<string, string> = {
   gemini: "https://generativelanguage.googleapis.com/v1beta/openai",
   groq: "https://api.groq.com/openai/v1",
   openrouter: "https://openrouter.ai/api/v1",
-  nvidia: "https://integrate.api.nvidia.com/v1",
-  cloudflare: "",
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com",
+};
+const DEFAULT_MODELS: Record<string, string> = {
+  gemini: "gemini-4-neon",
+  groq: "openai/gpt-oss-120b",
+  openrouter: "nvidia/nemotron-3-ultra:free",
+  openai: "gpt-6.2-sol",
+  anthropic: "claude-sonnet-5-5",
 };
 
 function readSlot(slot: ModelSlot): ProviderSlotConfig {
   const prefix = `AI_MODEL_${slot}`;
   const provider = (process.env[`${prefix}_PROVIDER`] ?? "").trim().toLowerCase();
-  const model = (process.env[`${prefix}_MODEL`] ?? "").trim();
+  const model = (process.env[`${prefix}_MODEL`] ?? DEFAULT_MODELS[provider] ?? "").trim();
   const baseUrl = (process.env[`${prefix}_BASE_URL`] ?? DEFAULT_BASE_URLS[provider] ?? "").trim();
   const apiKey = process.env[`${prefix}_API_KEY`] ?? "";
   return { slot, provider, model, baseUrl, configured: Boolean(provider && model && apiKey && baseUrl) };
 }
 
 export function getProviderConfiguration(): ProviderSlotConfig[] {
-  return (["A", "B", "C"] as const).map(readSlot);
+  return SLOTS.map(readSlot);
 }
 
+/** Return every fully configured provider. Individual provider failures are isolated by the orchestrator. */
 export function createConfiguredAdapters() {
-  const configs = (["A", "B", "C"] as const).map((slot) => {
-    const prefix = `AI_MODEL_${slot}`;
-    return {
-      ...readSlot(slot),
-      apiKey: process.env[`${prefix}_API_KEY`] ?? "",
-    };
+  return SLOTS.flatMap((slot) => {
+    const config = readSlot(slot);
+    if (!config.configured) return [];
+    const apiKey = process.env[`AI_MODEL_${slot}_API_KEY`] ?? "";
+    const adapterConfig = { ...config, apiKey } as OpenAICompatibleConfig;
+    return [config.provider === "anthropic"
+      ? createAnthropicAdapter(adapterConfig)
+      : createOpenAICompatibleAdapter(adapterConfig)];
   });
-  const missing = configs.filter((item) => !item.configured).map((item) => item.slot);
-  if (missing.length) throw new Error(`AI provider configuration missing for slots: ${missing.join(", ")}.`);
-  return configs.map((item) => createOpenAICompatibleAdapter(item as OpenAICompatibleConfig));
 }
