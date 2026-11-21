@@ -1,5 +1,5 @@
 import type { CoordinatedResult, ModelAdapter, ModelRequest } from "./types";
-import { SAMZY_REVENUE_PLAYBOOK } from "./sales-playbook";
+import { SALES_CONVERSION_PLAYBOOK } from "./sales-playbook";
 import { SAMZY_BUSINESS_LIFECYCLE } from "../business/lifecycle-playbook";
 import { SAMZY_SERVICE_CATALOG, renderSamzyServiceDiscoveryRules } from "../business/service-catalog";
 
