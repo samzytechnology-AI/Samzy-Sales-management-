@@ -67,18 +67,18 @@ export default function Home() {
     setToken(data.session.access_token); setAuthText("Secure session connected.");
   }
 
-  async function send(text?:string){
+  async function send(text?:string, task: "business_advice" | "prospect_discovery" | "company_research" | "lead_qualification" | "outreach_draft" | "reply_analysis" = "business_advice"){
     const question=(text??draft).trim();
     if(!question||busy)return;
     setMessages(old=>[...old,{id:Date.now(),role:"user",content:question}]);
     setDraft(""); setBusy(true);
-    if(!token||!orgId.trim()){
+    if(!token||!orgId.trim()||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orgId.trim())){
       setMessages(old=>[...old,{id:Date.now()+1,role:"assistant",content:"I have received your instruction, but the secure company workspace is not connected. Sign in and enter the organisation UUID first. I will not invent company records or pretend an action has been completed."}]);
       setBusy(false);return;
     }
     try{
       const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({
-        task:"business_advice",objective:question,
+        task,objective:question,
         ...(conversationId?{conversationId}:{}),
         context:{
           product:"Samzy Business Command Centre",
@@ -105,7 +105,7 @@ export default function Home() {
     }finally{setBusy(false);}
   }
 
-  const providers=health?.providers??[];
+  async function signOut(){\n    const client=getBrowserSupabase();\n    if(client) await client.auth.signOut();\n    setToken("");setConversationId(null);setMessages([{id:Date.now(),role:"assistant",content:"You have signed out of the company workspace. Sign in again to continue."}]);setAuthText("Signed out securely.");\n  }\n\n  const providers=health?.providers??[];
   const ready=health?.aiReady===true;
   const isChat=active==="AI General Manager";
 
@@ -117,7 +117,7 @@ export default function Home() {
       <div className="sidebar-bottom"><div className="secure-note"><span>⌑</span><div><b>Company-first security</b><small>Private workspace · Approval-led</small></div></div><div className="company-user"><div className="avatar">ST</div><div><b>Samzy Technology Limited</b><small>Company workspace</small></div></div></div>
     </aside>
     <section className="main">
-      <header className="topbar"><div className="crumb">Samzy Technology Limited <span>/</span> <b>{active}</b></div><div className="top-actions"><span className={ready?"health good":"health"}><i/>{ready?"AI SYSTEM READY":"SETUP IN PROGRESS"}</span><span className="avatar small">ST</span></div></header>
+      <header className="topbar"><div className="crumb">Samzy Technology Limited <span>/</span> <b>{active}</b></div><div className="top-actions"><span className={ready?"health good":"health"}><i/>{ready?"AI SYSTEM READY":"SETUP IN PROGRESS"}</span>{token?<button className="signout-button" onClick={()=>void signOut()}>Sign out</button>:null}<span className="avatar small">ST</span></div></header>
       <div className="content">
         <section className="welcome"><div><div className="eyebrow">COMPANY OPERATIONS · COMMAND CENTRE</div><h1>{isChat?"Your AI General Manager.":"Good morning. Let's build."}</h1><p>{isChat?"One conversation for company intelligence, planning and controlled execution.":"Your business at a glance. Intelligence, operations and execution in one place."}</p></div><button className="primary" onClick={()=>setActive("AI General Manager")}>✳ &nbsp;Talk to AI Manager</button></section>
         {active==="Overview"?<>
@@ -132,11 +132,11 @@ export default function Home() {
           <section className="dashboard-grid">
             <article className="panel intelligence"><div className="panel-head"><div><div className="eyebrow">CENTRAL INTELLIGENCE</div><h2>AI collaboration layer</h2></div><span className={ready?"chip good":"chip"}>{providers.filter(p=>p.configured).length}/3 models connected</span></div><p className="muted">Three coordinated AI providers working toward one company objective, with shared approved memory and a single synthesis.</p><div className="provider-list">{["A","B","C"].map(slot=>{const p=providers.find(x=>x.slot===slot);return <div className="provider" key={slot}><span className="provider-letter">{slot}</span><div><b>Model {slot} · {p?.provider??"Provider pending"}</b><small>{p?.model??"Configure provider and model credentials"}</small></div><em className={p?.configured?"connected":""}>{p?.configured?"Connected":"Not connected"}</em></div>})}</div><button className="inline-action" onClick={()=>setActive("AI General Manager")}>Open AI General Manager ↗</button></article>
             <article className="panel quick"><div className="eyebrow">MOVE THE BUSINESS FORWARD</div><h2>Quick commands</h2>{[
-              ["⌕","Research new prospects","Find and qualify Nigerian businesses","Research new Nigerian businesses that could need our services. Do not contact anyone."],
-              ["▣","Review company projects","Progress, blockers and next steps","Give me a summary of active projects, blockers and next steps."],
-              ["✉","Draft client outreach","Human, company-branded and approval-first","Prepare a personalised, human outreach draft for a researched prospect. Do not send it."],
-              ["✓","Review pending approvals","Decisions that need company approval","Show me pending company decisions and approvals."]
-            ].map(([ico,title,desc,command])=><button className="quick-row" key={title} onClick={()=>{setActive("AI General Manager");setDraft(command);}}><i>{ico}</i><span><b>{title}</b><small>{desc}</small></span><em>↗</em></button>)}</article>
+              ["⌕","Research new prospects","Find and qualify Nigerian businesses","Research new Nigerian businesses that could need our services. Do not contact anyone.","prospect_discovery"],
+              ["▣","Review company projects","Progress, blockers and next steps","Give me a summary of active projects, blockers and next steps.","business_advice"],
+              ["✉","Draft client outreach","Human, company-branded and approval-first","Prepare a personalised, human outreach draft for a researched prospect. Do not send it.","outreach_draft"],
+              ["✓","Review pending approvals","Decisions that need company approval","Show me pending company decisions and approvals.","business_advice"]
+            ].map(([ico,title,desc,command,task])=><button className="quick-row" key={title} onClick={()=>{setActive("AI General Manager");void send(command,task as "business_advice"|"prospect_discovery"|"outreach_draft");}}><i>{ico}</i><span><b>{title}</b><small>{desc}</small></span><em>↗</em></button>)}</article>
           </section>
           <section className="lower-grid"><article className="panel"><div className="eyebrow">COMPANY PULSE</div><h2>Operations overview</h2><div className="empty"><span>⌁</span><b>Your verified company activity will appear here</b><p>CRM, projects, finance and product integrations will populate this area with actual company records.</p></div></article><article className="panel"><div className="eyebrow">CONNECTED ECOSYSTEM</div><h2>Product registry</h2>{[["SC","Samzy School Cloud","Independent product · Integration pending"],["WS","Samzy Website Studio","Product registry slot"],["AS","Samzy App Studio","Product registry slot"]].map(([code,name,desc])=><div className="product" key={code}><span>{code}</span><div><b>{name}</b><small>{desc}</small></div><em>Pending</em></div>)}</article></section>
         </>:active==="AI General Manager"?<section className="chat-panel">
