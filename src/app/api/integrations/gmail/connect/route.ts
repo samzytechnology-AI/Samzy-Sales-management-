@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     url.searchParams.set("include_granted_scopes", "true");
     url.searchParams.set("state", state);
     const response = NextResponse.json({ authorizationUrl: url.toString(), redirectUri }, { headers: { "Cache-Control": "no-store" } });
-    response.cookies.set("samzy_gmail_oauth", `${state}.${organizationId}`, {
+    response.cookies.set("samzy_gmail_oauth", `${state}.${organizationId}.${auth.user.id}`, {
       httpOnly: true, secure: request.nextUrl.protocol === "https:", sameSite: "lax", path: "/", maxAge: 600,
     });
     return response;
