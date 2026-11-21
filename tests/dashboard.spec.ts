@@ -58,7 +58,8 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
         await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Unknown mock record type" }) });
         return;
       }
-      const record = { ...input, ...(input.type === "contact_point" ? { address: input.channel === "email" ? String(input.address).toLowerCase() : input.address, is_verified: false } : {}), id: `mock-${records[key].length + 1}`, status: input.type === "approval" ? "pending" : input.status ?? (input.type === "task" ? "open" : "active"), priority: input.type === "task" ? input.priority ?? "normal" : undefined };
+      const linkedContact = input.type === "outreach_draft" ? records.contactPoints.find(x => x.id === input.contact_point_id) : null;
+      const record = { ...input, ...(linkedContact ? { prospect_id: linkedContact.prospect_id, channel: linkedContact.channel, recipient: linkedContact.address, direction: "outbound" } : {}), ...(input.type === "contact_point" ? { address: input.channel === "email" ? String(input.address).toLowerCase() : input.address, is_verified: false } : {}), id: `mock-${records[key].length + 1}`, status: input.type === "approval" ? "pending" : input.type === "outreach_draft" ? "draft" : input.status ?? (input.type === "task" ? "open" : "active"), priority: input.type === "task" ? input.priority ?? "normal" : undefined };
       records[key].unshift(record);
       await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ record }) });
       return;
