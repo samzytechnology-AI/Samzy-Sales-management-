@@ -58,7 +58,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
         await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Unknown mock record type" }) });
         return;
       }
-      const record = { ...input, ...(input.type === "contact_point" ? { address: input.channel === "email" ? String(input.address).toLowerCase() : input.address, is_verified: false } : {}), id: `mock-${records[key].length + 1}`, status: input.type === "approval" ? "pending" : input.status ?? "active" };
+      const record = { ...input, ...(input.type === "contact_point" ? { address: input.channel === "email" ? String(input.address).toLowerCase() : input.address, is_verified: false } : {}), id: `mock-${records[key].length + 1}`, status: input.type === "approval" ? "pending" : input.status ?? (input.type === "task" ? "open" : "active"), priority: input.type === "task" ? input.priority ?? "normal" : undefined };
       records[key].unshift(record);
       await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ record }) });
       return;
