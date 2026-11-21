@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; researchReady?: boolean; emailOutreachReady?: boolean; whatsappOutreachReady?: boolean; outboundEnabled?: boolean };
+type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; researchReady?: boolean; emailOutreachReady?: boolean; gmailOAuthReady?: boolean; whatsappOutreachReady?: boolean; outboundEnabled?: boolean };\ntype GmailMessage = { id:string; threadId:string; from:string; subject:string; date:string; snippet:string };
 type ChatMessage = { role: "user" | "assistant"; content: string; id: number; actorUserId?: string | null };
 type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; canSendOutreach?:boolean; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[]; contactPoints?: any[]; tasks?: any[] };
 type AIAction = { id:string; action_type:string; summary:string; payload:Record<string,unknown>; status:string; requested_by:string; created_at:string; expires_at:string; execution_result?:Record<string,unknown>|null; failure_reason?:string|null };
@@ -46,7 +46,7 @@ export default function Home() {
   const [orgId,setOrgId] = useState("");
   const [conversationId,setConversationId] = useState<string|null>(null);
   const [token,setToken] = useState("");
-  const [currentUserId,setCurrentUserId] = useState("");
+  const [currentUserId,setCurrentUserId] = useState("");\n  const [gmailMessages,setGmailMessages] = useState<GmailMessage[]>([]);\n  const [gmailMailbox,setGmailMailbox] = useState("");\n  const [gmailBusy,setGmailBusy] = useState(false);\n  const [gmailError,setGmailError] = useState("");
   const [authText,setAuthText] = useState("");
   const [draft,setDraft] = useState("");
   const [busy,setBusy] = useState(false);
@@ -237,6 +237,34 @@ export default function Home() {
     }catch(err){setWorkspaceError(err instanceof Error?err.message:"The WhatsApp message could not be sent.");}
     finally{setSaveBusy(false);}
   }
+  async function connectGmail(){
+    if(!token||!orgId.trim()){setGmailError("Connect the secure company workspace first.");return;}
+    setGmailBusy(true);setGmailError("");
+    try{
+      const response=await fetch("/api/integrations/gmail/connect",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({organizationId:orgId.trim()})});
+      const result=await response.json();if(!response.ok||!result.authorizationUrl)throw new Error(result.error??"Could not start Gmail connection.");
+      window.location.assign(result.authorizationUrl);
+    }catch(error){setGmailError(error instanceof Error?error.message:"Gmail connection could not be started.");setGmailBusy(false);}
+  }
+  async function syncGmail(){
+    if(!token||!orgId.trim())return;
+    setGmailBusy(true);setGmailError("");
+    try{
+      const response=await fetch("/api/integrations/gmail/inbox",{headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"});
+      const result=await response.json();if(!response.ok)throw new Error(result.error??"Inbox sync failed.");
+      setGmailMessages(result.messages??[]);setGmailMailbox(result.mailbox??"");
+    }catch(error){setGmailError(error instanceof Error?error.message:"Inbox sync failed.");}
+    finally{setGmailBusy(false);}
+  }
+  function analyseGmailMessage(message:GmailMessage){
+    void send([
+      "Analyse this incoming Gmail message and prepare a human, context-aware reply. Do not send anything.",
+      `From: ${message.from}`,`Subject: ${message.subject}`,`Received: ${message.date}`,
+      `Message preview: ${message.snippet}`,
+      "Identify the sender's intent, questions, sentiment, risks, facts to verify, and recommended next step. Then draft a concise reply. Clearly state if the preview is insufficient and request the full message rather than inventing details.",
+    ].join("\\n"),"reply_analysis");
+    setActive("AI General Manager");
+  }
   function naira(value:number){return new Intl.NumberFormat("en-NG",{style:"currency",currency:"NGN",maximumFractionDigits:0}).format(value??0);}
 
   async function signIn(e:FormEvent){
@@ -389,7 +417,32 @@ export default function Home() {
               <form className="record-form" onSubmit={e=>void submitModuleForm(e,"finance")}><h3>Record a transaction</h3><select name="direction" defaultValue="income"><option value="income">Income</option><option value="expense">Expense</option></select><input name="category" placeholder="Category" required/><input name="description" placeholder="Description" required/><input name="amount_ngn" type="number" min="1" step="1" placeholder="Amount in NGN" required/><select name="status" defaultValue="recorded"><option value="recorded">Recorded</option><option value="pending">Pending</option></select><input name="occurred_at" type="date" aria-label="Transaction date"/><button className="primary" disabled={saveBusy}>Save transaction</button></form>
               <div className="record-list">{(workspace?.finance??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.description}</b><small>{item.category} · {item.occurred_at} · {item.status}</small></div><strong>{item.direction==="expense"?"−":"+"}{naira(Number(item.amount_ngn))}</strong></div>)}{!workspace?.finance?.length?<p className="empty">No financial transactions recorded.</p>:null}</div>
             </>:null}
-            {active==="Settings"?<div className="settings-grid"><div><small>Workspace connection</small><b>Authenticated session</b></div><div><small>Organisation ID</small><b>{orgId}</b></div><div><small>AI providers configured</small><b>{providers.filter(p=>p.configured).length} of 3</b></div><div><small>Live web research</small><b>{health?.researchReady?"Brave Search configured":"Needs BRAVE_SEARCH_API_KEY"}</b></div><div><small>Email outreach</small><b>{health?.emailOutreachReady?(health?.supabaseConfigured?"Provider + database configured":"Provider configured; database pending"):"Needs Resend credentials"}</b></div><div><small>WhatsApp outreach</small><b>Approved template + credentials required</b></div><div><small>Outbound control</small><b>Owner/admin explicit send only</b></div></div>:null}
+            {active==="Settings"?<>
+              <div className="settings-grid">
+                <div><small>Workspace connection</small><b>Authenticated session</b></div>
+                <div><small>Organisation ID</small><b>{orgId}</b></div>
+                <div><small>AI providers configured</small><b>{providers.filter(p=>p.configured).length} of 5</b></div>
+                <div><small>Live web research</small><b>{health?.researchReady?"Tavily configured":"Needs TAVILY_API_KEY"}</b></div>
+                <div><small>Gmail OAuth</small><b>{health?.gmailOAuthReady?"OAuth credentials configured":"Needs Google OAuth credentials"}</b></div>
+                <div><small>Gmail mailbox storage</small><b>{health?.emailOutreachReady?"Encrypted token storage configured":"Needs Supabase service key and token encryption"}</b></div>
+                <div><small>WhatsApp outreach</small><b>Approved template + credentials required</b></div>
+                <div><small>Outbound control</small><b>Owner/admin explicit send only</b></div>
+              </div>
+              <div className="record-form">
+                <h3>Company Gmail</h3>
+                <p>Connect the Samzy mailbox using Google's secure authorization. Incoming messages can then be reviewed and analysed by the AI Manager. Replies are never sent automatically.</p>
+                <div className="form-actions">
+                  <button className="primary" type="button" disabled={gmailBusy||!token} onClick={()=>void connectGmail()}>Connect Gmail ↗</button>
+                  <button className="inline-action" type="button" disabled={gmailBusy||!token} onClick={()=>void syncGmail()}>{gmailBusy?"Working…":"Sync inbox"}</button>
+                </div>
+                {gmailMailbox?<p><b>Connected mailbox:</b> {gmailMailbox}</p>:null}
+                {gmailError?<p className="module-alert">{gmailError}</p>:null}
+                <div className="record-list">
+                  {gmailMessages.map(message=><div className="record-row" key={message.id}><div><b>{message.subject||"(No subject)"}</b><small>{message.from} · {message.date}</small><p>{message.snippet}</p></div><button className="inline-action" type="button" onClick={()=>analyseGmailMessage(message)}>Analyse with AI ↗</button></div>)}
+                  {!gmailMessages.length?<p className="empty">Connect Gmail and sync the inbox to review incoming messages.</p>:null}
+                </div>
+              </div>
+            </>:null}
           </>:null}
         </section>}
         <footer><span>© Samzy Technology Limited</span><span>INTERNAL COMPANY PLATFORM · BUILD 0.2.0</span><span>⌑ Company-first workspace</span></footer>
