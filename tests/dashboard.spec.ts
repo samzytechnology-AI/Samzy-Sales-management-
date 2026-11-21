@@ -271,8 +271,10 @@ test("CRM stores prospect contact points as unverified until verification occurs
   const records = await connectMockWorkspace(page);
   await page.locator("nav").getByRole("button", { name: /Leads & CRM/ }).click();
   await page.getByPlaceholder("Company name").fill("Contact Capture Company");
+  await page.getByPlaceholder("Fit score (0–100)").fill("78");
   await page.getByRole("button", { name: "Save prospect" }).click();
   await expect.poll(() => records.prospects.length).toBe(1);
+  expect(records.prospects[0].fit_score).toBe(78);
   const row = page.locator(".record-row").filter({ hasText: "Contact Capture Company" });
   await row.getByPlaceholder("Email address or phone number").fill("SALES@EXAMPLE.COM");
   await row.getByPlaceholder("Contact source / consent basis (optional)").fill("Published company contact page");
