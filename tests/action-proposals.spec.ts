@@ -44,6 +44,6 @@ test("discards an otherwise valid proposal when coordinated synthesis is unavail
     "[[/SAMZY_ACTION_PROPOSAL]]";
   const result = extractAIActionProposal(output, false);
   expect(result.proposal).toBeUndefined();
-  expect(result.warning).toContain("synthesis was unavailable");
+  expect(result.warning).toContain("not eligible");
   expect(result.cleanContent).toBe("");
 });
