@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
       prospects: prospects.data ?? [], clients: clients.data ?? [], projects: projects.data ?? [],
       products: products.data ?? [], approvals: approvals.data ?? [], finance: transactions, outreach: outreach.data ?? [], contactPoints: contactPoints.data ?? [], tasks: tasks.data ?? [],
       module: moduleName,
+      canSendOutreach: ["owner", "admin"].includes(auth.role),
     }, { headers: noStore });
   } catch (cause) {
     return error(cause instanceof Error ? cause.message : "Company dashboard data could not be loaded.", 503);
