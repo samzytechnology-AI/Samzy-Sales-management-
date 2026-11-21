@@ -32,6 +32,7 @@ const createSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("client"), company_name: z.string().trim().min(2).max(160), primary_contact_name: z.string().trim().max(120).optional(), email: z.string().email().max(254).optional().or(z.literal("")), phone: z.string().trim().max(40).optional(), website_url: z.string().url().max(2048).optional().or(z.literal("")), industry: z.string().trim().max(100).optional(), notes: z.string().trim().max(2000).optional() }),
   z.object({ type: z.literal("project"), project_name: z.string().trim().min(2).max(160), status: z.enum(["planned","in_progress","blocked","review","delivered","cancelled"]).default("planned"), quoted_amount_ngn: z.number().int().nonnegative().optional(), due_at: z.string().datetime().optional(), client_id: z.string().uuid().optional().or(z.literal("")), prospect_id: z.string().uuid().optional().or(z.literal("")) }),
   z.object({ type: z.literal("prospect"), company_name: z.string().trim().min(2).max(160), website_url: z.string().url().max(2048).optional().or(z.literal("")), industry: z.string().trim().max(100).optional(), country: z.string().trim().max(80).optional(), fit_score: z.number().int().min(0).max(100).optional(), research_summary: z.string().trim().max(3000).optional() }),
+  z.object({ type: z.literal("contact_point"), prospect_id: uuid, channel: z.enum(["email","whatsapp","voice","other"]), address: z.string().trim().min(3).max(254), consent_basis: z.string().trim().max(300).optional() }),
   z.object({ type: z.literal("finance"), direction: z.enum(["income","expense"]), category: z.string().trim().min(2).max(80), description: z.string().trim().min(3).max(300), amount_ngn: z.number().int().positive().max(1_000_000_000_000), status: z.enum(["recorded","pending","void"]).default("recorded"), occurred_at: z.string().date().optional() }),
   z.object({ type: z.literal("product"), product_name: z.string().trim().min(2).max(120), product_key: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/), dashboard_url: z.string().url().max(2048).optional().or(z.literal("")), integration_mode: z.enum(["manual","api","webhook","oauth"]).default("manual"), capabilities: z.array(z.string().trim().min(1).max(60)).max(30).default([]) }),
   z.object({ type: z.literal("approval"), title: z.string().trim().min(3).max(160), description: z.string().trim().min(5).max(2000), category: z.enum(["outreach","pricing","contract","payment","delivery","other"]) }),
@@ -59,6 +60,8 @@ export async function GET(request: NextRequest) {
     ]);
     const errors = [prospectsCount,clientsCount,projectsCount,approvalsCount,prospects,clients,projects,products,approvals,finance,financialSummary].filter(x => x.error);
     if (errors.length) throw new Error("One or more dashboard records could not be loaded. Check whether the latest dashboard migration has been applied.");
+    const contactPoints = moduleName === "prospects" || moduleName === "overview" ? await db.from("contact_points").select("id,prospect_id,channel,address,is_verified,consent_basis,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300) : { data: [], error: null };
+    if (contactPoints.error) throw new Error("CRM contact points could not be loaded.");
     const outreach = moduleName === "outreach" ? await db.from("outreach_events").select("id,channel,recipient,direction,status,body,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : { data: [], error: null };
     if (outreach.error) throw new Error("Outreach history could not be loaded.");
     const transactions = finance.data ?? [];
@@ -76,7 +79,7 @@ export async function GET(request: NextRequest) {
         netNgn: Number(totals?.net_ngn ?? income - expenses),
       },
       prospects: prospects.data ?? [], clients: clients.data ?? [], projects: projects.data ?? [],
-      products: products.data ?? [], approvals: approvals.data ?? [], finance: transactions, outreach: outreach.data ?? [],
+      products: products.data ?? [], approvals: approvals.data ?? [], finance: transactions, outreach: outreach.data ?? [], contactPoints: contactPoints.data ?? [],
       module: moduleName,
     }, { headers: noStore });
   } catch (cause) {
@@ -101,6 +104,14 @@ export async function POST(request: NextRequest) {
       if (duplicateError) return error("Could not verify whether this prospect already exists.", 503);
       if (duplicate) return error(`A prospect for ${duplicate.company_name} with this website already exists.`, 409);
     }
+    if (input.type === "contact_point") {
+      const { data: linkedProspect, error: prospectLookupError } = await db.from("prospects").select("id").eq("id", input.prospect_id).eq("organization_id", organizationId).maybeSingle();
+      if (prospectLookupError || !linkedProspect) return error("The contact must belong to a prospect in this company workspace.", 403);
+      const normalizedAddress = input.channel === "email" ? input.address.toLowerCase() : input.address;
+      const { data: duplicateContact, error: contactLookupError } = await db.from("contact_points").select("id").eq("organization_id", organizationId).eq("channel", input.channel).eq("address", normalizedAddress).maybeSingle();
+      if (contactLookupError) return error("Could not verify whether this contact already exists.", 503);
+      if (duplicateContact) return error("This contact point is already recorded in the company CRM.", 409);
+    }
     if (input.type === "project" && input.client_id) {
       const { data: linkedClient, error: clientLookupError } = await db.from("clients").select("id").eq("id", input.client_id).eq("organization_id", organizationId).maybeSingle();
       if (clientLookupError || !linkedClient) return error("The selected client does not belong to this company workspace.", 403);
@@ -109,9 +120,10 @@ export async function POST(request: NextRequest) {
       const { data: linkedProspect, error: prospectLookupError } = await db.from("prospects").select("id").eq("id", input.prospect_id).eq("organization_id", organizationId).maybeSingle();
       if (prospectLookupError || !linkedProspect) return error("The selected prospect does not belong to this company workspace.", 403);
     }
-    const table = input.type === "client" ? "clients" : input.type === "project" ? "projects" : input.type === "prospect" ? "prospects" : input.type === "finance" ? "financial_transactions" : input.type === "product" ? "product_registry" : "approval_requests";
+    const table = input.type === "client" ? "clients" : input.type === "project" ? "projects" : input.type === "prospect" ? "prospects" : input.type === "contact_point" ? "contact_points" : input.type === "finance" ? "financial_transactions" : input.type === "product" ? "product_registry" : "approval_requests";
     const payload: Record<string, unknown> = { ...input, organization_id: organizationId };
     if (normalizedProspectWebsite) payload.website_url = normalizedProspectWebsite;
+    if (input.type === "contact_point") payload.address = input.channel === "email" ? input.address.toLowerCase() : input.address;
     delete payload.type;
     if (input.type === "finance") payload.recorded_by = user.id;
     if (input.type === "approval") payload.requested_by = user.id;
