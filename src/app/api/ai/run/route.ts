@@ -143,25 +143,25 @@ export async function POST(request: NextRequest) {
     if (conversationId) {
       const { data: conversation, error: conversationError } = await supabase
         .from("ai_conversations")
-        .select("id")
+        .select("id,scope,created_by")
         .eq("id", conversationId)
         .eq("organization_id", organizationId)
-        .eq("created_by", authData.user.id)
         .maybeSingle();
       if (conversationError) throw new Error("Could not verify the requested conversation.");
-      if (!conversation) return jsonError("That conversation does not belong to your account and company workspace.", 404);
+      if (!conversation || (conversation.scope === "personal" && conversation.created_by !== authData.user.id)) {
+        return jsonError("That conversation does not belong to your account and company workspace.", 404);
+      }
+      if (conversation.scope !== "company") {
+        return jsonError("The shared company AI conversation is ready. Refresh the dashboard to continue in it.", 409);
+      }
     } else {
-      const { data: created, error: createError } = await supabase
-        .from("ai_conversations")
-        .insert({
-          organization_id: organizationId,
-          created_by: authData.user.id,
-          title: body.objective.slice(0, 80),
-        })
-        .select("id")
-        .single();
-      if (createError || !created) throw new Error("Could not create a company conversation.");
-      conversationId = created.id;
+      const { data: sharedConversation, error: createError } = await supabase.rpc("get_or_create_company_ai_conversation", {
+        p_organization_id: organizationId,
+        p_user_id: authData.user.id,
+        p_title: "Samzy Technology — AI General Manager",
+      });
+      if (createError || !sharedConversation) throw new Error("Could not open the shared company AI conversation.");
+      conversationId = sharedConversation as string;
     }
 
     const { error: userMessageError } = await supabase.from("ai_messages").insert({
@@ -267,18 +267,21 @@ export async function GET(request: NextRequest) {
       return jsonError("You do not have permission to access this company workspace.", 403);
     }
 
+    const { data: sharedConversationId, error: sharedConversationError } = await supabase.rpc("get_or_create_company_ai_conversation", {
+      p_organization_id: organizationId,
+      p_user_id: authData.user.id,
+      p_title: "Samzy Technology — AI General Manager",
+    });
+    if (sharedConversationError || !sharedConversationId) throw new Error("Could not open the shared company AI conversation.");
+
     const { data: conversation, error: conversationError } = await supabase
       .from("ai_conversations")
       .select("id,title,updated_at")
+      .eq("id", sharedConversationId)
       .eq("organization_id", organizationId)
-      .eq("created_by", authData.user.id)
-      .eq("status", "active")
-      .order("updated_at", { ascending: false })
-      .limit(1)
+      .eq("scope", "company")
       .maybeSingle();
-    if (conversationError) throw new Error("Could not load your company conversation.");
-
-    if (!conversation) return NextResponse.json({ conversationId: null, messages: [] }, { headers: { "Cache-Control": "no-store" } });
+    if (conversationError || !conversation) throw new Error("Could not load your shared company conversation.");
 
     const { data: messages, error: messagesError } = await supabase
       .from("ai_messages")
