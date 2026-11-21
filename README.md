@@ -54,7 +54,7 @@ Vercel deployment and production environment configuration are intentionally def
 - Build the production app with `npm run build`.
 - Install the Playwright Chromium browser with `npx playwright install chromium`.
 - Run dashboard browser tests with `npm run test:e2e`.
-- The current 21-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM and product assignment, prospect-to-client conversion, live overview metrics contact-point capture safeguards and shared AI conversation history attribution.
+- The current 22-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM and product assignment, prospect-to-client conversion, live overview metrics contact-point capture safeguards and shared AI conversation history attribution.
 - Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
 
 
@@ -72,3 +72,10 @@ Vercel deployment and production environment configuration are intentionally def
 - Organisation-scoped tasks support priorities, due dates, statuses and optional links to same-organisation projects, clients and prospects.
 - Task creation validates linked records server-side; status changes are audited.
 - Apply migration 008 after migrations 001–007. It has not been applied to a live database.
+
+
+## Outreach draft safety
+- The Sales & Outreach screen can save outbound drafts only; it never sends messages.
+- Draft creation requires an organisation-owned, verified contact point with a recorded consent basis.
+- The server checks suppression records, recent contact frequency and recent inbound conversations before saving a draft.
+- Drafts are excluded from the contact-frequency calculation because they have not been sent. Actual delivery remains disabled pending official provider configuration, approval workflow and channel-specific compliance.
