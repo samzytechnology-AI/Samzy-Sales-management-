@@ -64,3 +64,17 @@ test("workspace sign-in form gives a truthful configuration error when Supabase 
   await page.getByRole("button", { name: "Connect workspace" }).click();
   await expect(page.locator(".auth-text")).toContainText("Supabase browser authentication is not configured");
 });
+
+test("overview intelligence link opens the AI Manager", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Open AI General Manager/ }).click();
+  await expect(page.locator(".crumb")).toContainText("AI General Manager");
+  await expect(page.getByRole("heading", { name: "Talk to your AI General Manager" })).toBeVisible();
+});
+
+test("module discussion action returns to the AI Manager", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Projects" }).click();
+  await page.getByRole("button", { name: /Discuss this module with AI Manager/ }).click();
+  await expect(page.locator(".crumb")).toContainText("AI General Manager");
+});
