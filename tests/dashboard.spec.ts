@@ -13,7 +13,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
   };
   const accessToken = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiI1NTU1NTU1NS01NTU1LTQ1NTUtODU1NS01NTU1NTU1NTU1NTUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.signature";
   const session = { access_token: accessToken, token_type: "bearer", expires_in: 3600, refresh_token: "mock-refresh-token", user };
-  const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [], contactPoints: [] };
+  const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [], contactPoints: [], aiActions: [] };
 
   await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(session) }));
   await page.route("**/api/ai/run", route => {
@@ -25,6 +25,23 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: sharedHistory ? "77777777-7777-4777-8777-777777777777" : null, messages }) });
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: "77777777-7777-4777-8777-777777777777", synthesis: "Mock AI response", warnings: [] }) });
+  });
+  await page.route("**/api/actions", async route => {
+    const request = route.request();
+    if (request.method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ actions: records.aiActions }) });
+    if (request.method() === "POST") {
+      const input = request.postDataJSON() as Record<string, any>;
+      const action = { id: "ai-action-" + (records.aiActions.length + 1), ...input, action_type: input.actionType, status: "pending_approval", created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString() };
+      records.aiActions.unshift(action);
+      return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ action }) });
+    }
+    if (request.method() === "PATCH") {
+      const input = request.postDataJSON() as Record<string, any>;
+      const action = records.aiActions.find(item => item.id === input.id);
+      if (action) action.status = input.decision === "approved" ? "executed" : "rejected";
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ result: { status: action?.status, result: { record_id: "created-record" } } }) });
+    }
+    return route.continue();
   });
   await page.route("**/api/workspace**", async route => {
     const request = route.request();
@@ -301,4 +318,18 @@ test("AI General Manager restores shared company history with team attribution",
   await expect(page.locator(".messages")).toContainText("Company team");
   await expect(page.locator(".messages")).toContainText("I have loaded the shared company context.");
   await expect(page.locator(".messages")).toContainText("AI General Manager");
+});
+
+test("AI action proposals require approval and execute through the controlled action workflow", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Approvals/ }).click();
+  await page.getByPlaceholder("Prospect company name").fill("AI Proposed Prospect");
+  await page.getByPlaceholder("Website URL (optional)").fill("https://ai-proposed.example");
+  await page.getByRole("button", { name: "Submit action for approval" }).click();
+  await expect.poll(() => records.aiActions.length).toBe(1);
+  expect(records.aiActions[0].status).toBe("pending_approval");
+  await expect(page.getByText("AI Proposed Prospect")).toBeVisible();
+  await page.getByRole("button", { name: "Approve & execute" }).click();
+  await expect.poll(() => records.aiActions[0].status).toBe("executed");
+  await expect(page.getByText("executed", { exact: true })).toBeVisible();
 });
