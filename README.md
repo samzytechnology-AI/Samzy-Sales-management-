@@ -36,11 +36,12 @@ Apply these migrations, in order, only to the new dedicated Business Command Cen
 2. `supabase/migrations/20261121000200_ai_manager_persistence_and_limits.sql`
 3. `supabase/migrations/20261121000300_dashboard_operational_records.sql`
 4. `supabase/migrations/20261121000400_finance_summary_rpc.sql`
+5. `supabase/migrations/20261121000500_crm_prospect_conversion.sql`
 
 Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
 
 ## Dashboard operational modules
-The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; CRM and project records support audited status updates, and projects can be linked to same-organisation clients and prospects. Product registry supports product registration and outreach history is read-only in the current dashboard UI. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003 and 004 before these live modules can load.
+The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; CRM and project records support audited status updates, and projects can be linked to same-organisation clients and prospects. Prospects have a fit score, canonical website duplicate checks, and a transactional prospect-to-client conversion that preserves source linkage and writes an audit event. Product registry supports product registration and outreach history is read-only in the current dashboard UI. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003, 004 and 005 before the latest CRM and AI Manager features can load. The AI General Manager receives a bounded, read-only snapshot of recent prospects, clients, projects, approvals, outreach events, financial aggregates, recent AI runs and audit events, alongside approved company memory and the current conversation. Snapshot records are organisation-scoped and timestamped; the assistant must distinguish loaded recent records from all-time totals and cannot claim access to activity outside connected systems.
 
 ## Deployment boundary
 Vercel deployment and production environment configuration are intentionally deferred until the application code and verification pass are complete. At deployment time, add server-side provider keys and `SUPABASE_SERVICE_ROLE_KEY` as protected Vercel environment variables. Only the Supabase URL and anon/public key may be exposed to the browser.
@@ -50,5 +51,5 @@ Vercel deployment and production environment configuration are intentionally def
 - Build the production app with `npm run build`.
 - Install the Playwright Chromium browser with `npx playwright install chromium`.
 - Run dashboard browser tests with `npm run test:e2e`.
-- The current 15-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM linking.
+- The current 17-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM linking, prospect-to-client conversion and live overview metrics.
 - Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
