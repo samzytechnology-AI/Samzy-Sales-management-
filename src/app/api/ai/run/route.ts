@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
         ...body.context,
         conversationHistory: (history ?? []).reverse().map(item => ({ role: item.role, content: item.content.slice(0, 1200) })),
         approvedCompanyMemory: boundedApprovedMemory,
-        verifiedCompanySnapshot: companySnapshot,
+        recordedCompanySnapshot: companySnapshot,
       },
     });
 
