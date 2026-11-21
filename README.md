@@ -79,3 +79,6 @@ Vercel deployment and production environment configuration are intentionally def
 - Draft creation requires an organisation-owned, verified contact point with a recorded consent basis.
 - The server checks suppression records, recent contact frequency and recent inbound conversations before saving a draft.
 - Drafts are excluded from the contact-frequency calculation because they have not been sent. Actual delivery remains disabled pending official provider configuration, approval workflow and channel-specific compliance.
+
+
+Contact-point verification is a recorded manual attestation by an owner or administrator, not an automated mailbox or telephone verification. The audit event stores the operator's verification note and method. Do not describe a contact as independently verified unless an external verification process was actually completed.
