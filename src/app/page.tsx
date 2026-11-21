@@ -3,7 +3,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; researchReady?: boolean; emailOutreachReady?: boolean; gmailOAuthReady?: boolean; whatsappOutreachReady?: boolean; outboundEnabled?: boolean };\ntype GmailMessage = { id:string; threadId:string; from:string; subject:string; date:string; snippet:string };
+type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; researchReady?: boolean; emailOutreachReady?: boolean; gmailOAuthReady?: boolean; whatsappOutreachReady?: boolean; outboundEnabled?: boolean };
+type GmailMessage = { id:string; threadId:string; from:string; subject:string; date:string; snippet:string };
 type ChatMessage = { role: "user" | "assistant"; content: string; id: number; actorUserId?: string | null };
 type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; canSendOutreach?:boolean; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[]; contactPoints?: any[]; tasks?: any[] };
 type AIAction = { id:string; action_type:string; summary:string; payload:Record<string,unknown>; status:string; requested_by:string; created_at:string; expires_at:string; execution_result?:Record<string,unknown>|null; failure_reason?:string|null };
@@ -46,7 +47,12 @@ export default function Home() {
   const [orgId,setOrgId] = useState("");
   const [conversationId,setConversationId] = useState<string|null>(null);
   const [token,setToken] = useState("");
-  const [currentUserId,setCurrentUserId] = useState("");\n  const [gmailMessages,setGmailMessages] = useState<GmailMessage[]>([]);\n  const [gmailReplyDrafts,setGmailReplyDrafts] = useState<Record<string,string>>({});\n  const [gmailMailbox,setGmailMailbox] = useState("");\n  const [gmailBusy,setGmailBusy] = useState(false);\n  const [gmailError,setGmailError] = useState("");
+  const [currentUserId,setCurrentUserId] = useState("");
+  const [gmailMessages,setGmailMessages] = useState<GmailMessage[]>([]);
+  const [gmailReplyDrafts,setGmailReplyDrafts] = useState<Record<string,string>>({});
+  const [gmailMailbox,setGmailMailbox] = useState("");
+  const [gmailBusy,setGmailBusy] = useState(false);
+  const [gmailError,setGmailError] = useState("");
   const [authText,setAuthText] = useState("");
   const [draft,setDraft] = useState("");
   const [busy,setBusy] = useState(false);
