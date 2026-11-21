@@ -3,7 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
-  // CI runners are CPU-constrained; a single browser worker avoids intermittent request timing flakes.\n  workers: process.env.CI ? 1 : undefined,
+  // CI runners are CPU-constrained; a single browser worker avoids intermittent request timing flakes.
+  workers: process.env.CI ? 1 : undefined,
   reporter: "list",
   use: {
     baseURL: "http://127.0.0.1:3000",
