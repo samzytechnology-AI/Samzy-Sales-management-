@@ -10,7 +10,7 @@ A modular operating system for Samzy Technology. The command centre coordinates 
 - Supabase client placeholders for the dedicated Business Command Centre project only. Never connect the School Cloud database.
 
 ## Safety defaults
-- Outbound communication stays disabled until configured and approved.
+- External email delivery remains disabled until the server-side Resend credentials are configured and an owner/admin explicitly clicks Send. WhatsApp first-contact delivery remains blocked until approved Meta templates and credentials are configured.
 - No autonomous commitments, contracts, payment actions or final price approvals.
 - Never store provider API keys in browser code or commit secrets.
 - Research claims must retain source evidence and timestamps.
@@ -20,7 +20,7 @@ A modular operating system for Samzy Technology. The command centre coordinates 
 2. Copy `.env.example` to `.env.local` and add server-side secrets.
 3. Run `npm install` and `npm run dev`.
 
-Database migrations, provider adapters, messaging delivery and deployment require configuration and testing before production use.
+Database migrations and live AI providers still require configuration. Resend email delivery code is implemented but requires credentials and live verification. WhatsApp first-contact templates, provider credentials, database migration application and deployment remain pending.
 
 ## AI General Manager and chat persistence
 - The dashboard includes an AI General Manager chat surface.
@@ -45,7 +45,7 @@ Apply these migrations, in order, only to the new dedicated Business Command Cen
 Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
 
 ## Dashboard operational modules
-The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; CRM and project records support audited status updates, and projects can be linked to same-organisation clients and prospects and assigned to registered Samzy products. Prospects have a fit score, canonical website duplicate checks, transactional prospect-to-client conversion with source linkage and audit history, and organisation-scoped contact-point capture. Contact points are unverified by default; email addresses are normalised, and the AI context receives contact-channel verification counts without receiving the stored contact addresses. Product registry supports product registration and outreach history is read-only in the current dashboard UI. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003, 004 and 005 before the latest CRM and AI Manager features can load. The AI General Manager uses a single organisation-wide conversation and receives a bounded, read-only snapshot of recent prospects, clients, projects, approvals, outreach events, financial aggregates, recent AI runs and audit events, alongside approved company memory and the current conversation. Snapshot records are organisation-scoped and timestamped; the assistant must distinguish loaded recent records from all-time totals and cannot claim access to activity outside connected systems.
+The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; CRM and project records support audited status updates, and projects can be linked to same-organisation clients and prospects and assigned to registered Samzy products. Prospects have a fit score, canonical website duplicate checks, transactional prospect-to-client conversion with source linkage and audit history, and organisation-scoped contact-point capture. Contact points are unverified by default; email addresses are normalised, and the AI context receives contact-channel verification counts without receiving the stored contact addresses. Product registry supports product registration. Sales & Outreach stores eligible drafts and supports owner/admin-initiated email delivery through the guarded Resend adapter; WhatsApp first-contact sending is not enabled. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003, 004 and 005 before the latest CRM and AI Manager features can load. The AI General Manager uses a single organisation-wide conversation and receives a bounded, read-only snapshot of recent prospects, clients, projects, approvals, outreach events, financial aggregates, recent AI runs and audit events, alongside approved company memory and the current conversation. Snapshot records are organisation-scoped and timestamped; the assistant must distinguish loaded recent records from all-time totals and cannot claim access to activity outside connected systems.
 
 ## Deployment boundary
 Vercel deployment and production environment configuration are intentionally deferred until the application code and verification pass are complete. At deployment time, add server-side provider keys and `SUPABASE_SERVICE_ROLE_KEY` as protected Vercel environment variables. Only the Supabase URL and anon/public key may be exposed to the browser.
@@ -55,17 +55,17 @@ Vercel deployment and production environment configuration are intentionally def
 - Build the production app with `npm run build`.
 - Install the Playwright Chromium browser with `npx playwright install chromium`.
 - Run dashboard browser tests with `npm run test:e2e`.
-- The current 28-test automated suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM and product assignment, prospect-to-client conversion, live overview metrics contact-point capture safeguards and shared AI conversation history attribution.
+- The automated suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, CRM and finance workflows, shared AI conversation history, controlled action execution, sales drafts, email-send UI behaviour and Resend adapter idempotency/error handling.
 - Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
 
 
 ## Controlled AI action engine
 - The AI action API accepts only a fixed whitelist of structured actions: create prospect, update prospect status, create project, update project status, and create an approval request.
 - Proposals are stored separately from operational records with organisation scope, requester, idempotency key, 24-hour expiry, status and execution outcome.
-- Proposing an action never mutates CRM or project data. Only an owner or administrator can approve or reject a pending proposal.
+- The model can only propose a fixed, validated action after an explicit user instruction. Low-risk internal records may auto-execute for owners/admins; manager proposals remain in the review queue. The system does not auto-send outreach or make external commercial commitments.
 - Approval calls a database transaction that rechecks the approver's organisation role, locks the pending request, validates organisation ownership of linked records, performs the whitelisted operation, and writes an audit event. External messaging, payments, contracts, final pricing and deletions are not executable actions.
 - The Approvals screen includes an AI-assisted prospect proposal form and a queue for reviewing and executing action requests.
-- The automated browser suite includes the proposal → pending approval → approve/execute lifecycle. Browser tests mock the API; they do not prove live PostgreSQL transaction behaviour.
+- The automated browser suite tests owner auto-execution of an explicit low-risk prospect action and the manager/owner review queue. Browser tests mock the API; they do not prove live PostgreSQL transaction behaviour.
 - Apply migration 007 after migrations 001–006. It has not been applied to a live database.
 
 
