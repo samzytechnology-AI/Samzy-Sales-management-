@@ -53,10 +53,12 @@ export async function GET(request: NextRequest) {
       moduleName === "projects" || moduleName === "overview" ? db.from("projects").select("id,project_name,status,quoted_amount_ngn,approved_amount_ngn,due_at,created_at,client_id,prospect_id").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
       moduleName === "products" ? db.from("product_registry").select("id,product_name,product_key,dashboard_url,integration_mode,health_status,capabilities,active").eq("organization_id", organizationId).order("product_name").limit(100) : Promise.resolve({ data: [], error: null }),
       moduleName === "approvals" ? db.from("approval_requests").select("id,title,description,category,status,decision_note,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
-      moduleName === "finance" ? db.from("financial_transactions").select("id,direction,category,description,amount_ngn,status,occurred_at,created_at").eq("organization_id", organizationId).order("occurred_at", { ascending: false }).limit(500) : Promise.resolve({ data: [], error: null }),
+      moduleName === "finance" || moduleName === "overview" ? db.from("financial_transactions").select("id,direction,category,description,amount_ngn,status,occurred_at,created_at").eq("organization_id", organizationId).order("occurred_at", { ascending: false }).limit(500) : Promise.resolve({ data: [], error: null }),
     ]);
     const errors = [prospectsCount,clientsCount,projectsCount,approvalsCount,prospects,clients,projects,products,approvals,finance].filter(x => x.error);
     if (errors.length) throw new Error("One or more dashboard records could not be loaded. Check whether the latest dashboard migration has been applied.");
+    const outreach = moduleName === "outreach" ? await db.from("outreach_events").select("id,channel,recipient,direction,status,body,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : { data: [], error: null };
+    if (outreach.error) throw new Error("Outreach history could not be loaded.");
     const transactions = finance.data ?? [];
     const income = transactions.filter((x: any) => x.direction === "income" && x.status !== "void").reduce((sum: number, x: any) => sum + Number(x.amount_ngn), 0);
     const expenses = transactions.filter((x: any) => x.direction === "expense" && x.status !== "void").reduce((sum: number, x: any) => sum + Number(x.amount_ngn), 0);
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
         netNgn: income - expenses,
       },
       prospects: prospects.data ?? [], clients: clients.data ?? [], projects: projects.data ?? [],
-      products: products.data ?? [], approvals: approvals.data ?? [], finance: transactions,
+      products: products.data ?? [], approvals: approvals.data ?? [], finance: transactions, outreach: outreach.data ?? [],
       module: moduleName,
     }, { headers: noStore });
   } catch (cause) {
