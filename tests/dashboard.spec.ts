@@ -206,7 +206,7 @@ test("authenticated dashboard can add a prospect to CRM", async ({ page }) => {
   await expect.poll(() => records.prospects.length).toBe(1);
   await expect(page.getByText("Prospect Test Company")).toBeVisible();
   const row = page.locator(".record-row").filter({ hasText: "Prospect Test Company" });
-  await row.locator("select").selectOption("qualified");
+  await row.getByLabel("Status for Prospect Test Company").selectOption("qualified");
   await row.getByRole("button", { name: "Save status" }).click();
   await expect.poll(() => records.prospects[0].status).toBe("qualified");
 });
