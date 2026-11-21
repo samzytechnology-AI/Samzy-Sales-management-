@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   const state = request.nextUrl.searchParams.get("state") ?? "";
   const code = request.nextUrl.searchParams.get("code") ?? "";
   const cookie = request.cookies.get("samzy_gmail_oauth")?.value ?? "";
-  const [expectedState, organizationId] = cookie.split(".");
+  const [expectedState, organizationId, connectedBy] = cookie.split(".");
   const fail = (message: string, status = 400) => {
     const response = NextResponse.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
     response.cookies.delete("samzy_gmail_oauth");
