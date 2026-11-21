@@ -138,9 +138,8 @@ test("authenticated dashboard can create a client record", async ({ page }) => {
   await page.locator("nav").getByRole("button", { name: /Clients/ }).click();
   await page.getByPlaceholder("Company / client name").fill("Test Client Limited");
   await page.getByRole("button", { name: "Save client" }).click();
-  expect(records.clients).toHaveLength(1);
+  await expect.poll(() => records.clients.length).toBe(1);
   await expect(page.getByText("Test Client Limited")).toBeVisible();
-  expect(records.clients).toHaveLength(1);
 });
 
 test("authenticated dashboard can register a product", async ({ page }) => {
@@ -149,12 +148,11 @@ test("authenticated dashboard can register a product", async ({ page }) => {
   await page.getByPlaceholder("Product name").fill("Samzy Test Studio");
   await page.getByPlaceholder("Unique key (lowercase, hyphens)").fill("samzy-test-studio");
   await page.getByRole("button", { name: "Register product" }).click();
-  expect(records.products).toHaveLength(1);
+  await expect.poll(() => records.products.length).toBe(1);
   await expect(page.getByText("Samzy Test Studio")).toBeVisible();
-  expect(records.products).toHaveLength(1);
 });
 
-test("authenticated dashboard can record finance and calculate displayed totals", async ({ page }) => {
+test("authenticated dashboard can record finance and display the saved transaction", async ({ page }) => {
   await connectMockWorkspace(page);
   await page.locator("nav").getByRole("button", { name: /Finance/ }).click();
   await page.getByPlaceholder("Category").fill("Web development");
@@ -165,12 +163,12 @@ test("authenticated dashboard can record finance and calculate displayed totals"
 });
 
 test("authenticated dashboard can submit and decide an approval request", async ({ page }) => {
-  await connectMockWorkspace(page);
+  const records = await connectMockWorkspace(page);
   await page.locator("nav").getByRole("button", { name: /Approvals/ }).click();
   await page.getByPlaceholder("Approval title").fill("Approve test outreach");
   await page.getByPlaceholder("What needs approval and why?").fill("Approve the reviewed sample outreach message.");
   await page.getByRole("button", { name: "Submit for approval" }).click();
-  expect(records.approvals).toHaveLength(1);
+  await expect.poll(() => records.approvals.length).toBe(1);
   await expect(page.getByText("Approve test outreach")).toBeVisible();
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.getByText("approved", { exact: true })).toBeVisible();
