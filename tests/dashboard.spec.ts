@@ -13,7 +13,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
   };
   const accessToken = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiI1NTU1NTU1NS01NTU1LTQ1NTUtODU1NS01NTU1NTU1NTU1NTUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.signature";
   const session = { access_token: accessToken, token_type: "bearer", expires_in: 3600, refresh_token: "mock-refresh-token", user };
-  const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [], contactPoints: [], aiActions: [] };
+  const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [], contactPoints: [], aiActions: [], tasks: [] };
 
   await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(session) }));
   await page.route("**/api/ai/run", route => {
@@ -52,7 +52,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
     }
     if (request.method() === "POST") {
       const input = request.postDataJSON() as Record<string, any>;
-      const map: Record<string, string> = { client: "clients", project: "projects", prospect: "prospects", contact_point: "contactPoints", finance: "finance", approval: "approvals", product: "products" };
+      const map: Record<string, string> = { client: "clients", project: "projects", prospect: "prospects", contact_point: "contactPoints", finance: "finance", approval: "approvals", product: "products", task: "tasks" };
       const key = map[input.type];
       if (!key) {
         await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Unknown mock record type" }) });
@@ -80,7 +80,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: client }) });
         return;
       }
-      const key = input.type === "approval" ? "approvals" : input.type === "prospect" ? "prospects" : input.type === "project" ? "projects" : "clients";
+      const key = input.type === "approval" ? "approvals" : input.type === "prospect" ? "prospects" : input.type === "project" ? "projects" : input.type === "task" ? "tasks" : "clients";
       const item = records[key].find(x => x.id === input.id);
       if (item) item.status = input.type === "approval" ? input.decision : input.status;
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: item ?? input }) });
@@ -332,4 +332,24 @@ test("AI action proposals require approval and execute through the controlled ac
   await page.getByRole("button", { name: "Approve & execute" }).click();
   await expect.poll(() => records.aiActions[0].status).toBe("executed");
   await expect(page.getByText("executed", { exact: true })).toBeVisible();
+});
+
+test("authenticated workspace can create and update linked company tasks", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  records.projects.push({ id: "task-project-1", project_name: "School Website", status: "in_progress" });
+  records.clients.push({ id: "task-client-1", company_name: "Task Client", status: "active" });
+  await page.locator("nav").getByRole("button", { name: /Tasks/ }).click();
+  await page.getByPlaceholder("Task title").fill("Prepare school onboarding checklist");
+  await page.getByPlaceholder("Task details / expected outcome").fill("Confirm required school data and migration schedule.");
+  await page.locator('select[name="priority"]').selectOption("high");
+  await page.locator('select[name="project_id"]').selectOption("task-project-1");
+  await page.locator('select[name="client_id"]').selectOption("task-client-1");
+  await page.getByRole("button", { name: "Create task" }).click();
+  await expect.poll(() => records.tasks.length).toBe(1);
+  expect(records.tasks[0].project_id).toBe("task-project-1");
+  expect(records.tasks[0].client_id).toBe("task-client-1");
+  const row = page.locator(".record-row").filter({ hasText: "Prepare school onboarding checklist" });
+  await row.getByLabel("Status for Prepare school onboarding checklist").selectOption("completed");
+  await row.getByRole("button", { name: "Save status" }).click();
+  await expect.poll(() => records.tasks[0].status).toBe("completed");
 });
