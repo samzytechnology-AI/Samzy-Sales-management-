@@ -5,6 +5,11 @@ alter table public.ai_conversations
   add column if not exists scope text not null default 'personal'
   check (scope in ('personal','company'));
 
+alter table public.ai_messages
+  add column if not exists actor_user_id uuid references auth.users(id) on delete set null;
+create index if not exists ai_messages_actor_created_idx
+  on public.ai_messages(organization_id, actor_user_id, created_at desc);
+
 create or replace function public.can_access_company_ai(target_org uuid)
 returns boolean
 language sql
