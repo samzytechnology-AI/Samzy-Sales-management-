@@ -20,7 +20,7 @@ A modular operating system for Samzy Technology. The command centre coordinates 
 2. Copy `.env.example` to `.env.local` and add server-side secrets.
 3. Run `npm install` and `npm run dev`.
 
-Database migrations and live AI providers still require configuration. Gmail email delivery is implemented through the guarded owner/admin send endpoint. WhatsApp Cloud API approved-template delivery is implemented through a separate guarded owner/admin endpoint; both require provider credentials, verified sender setup and live verification. WhatsApp inbound webhook/reply synchronisation remains pending. Database migration application and deployment remain pending.
+The core database migrations through 012 have been applied to the dedicated Business Command Centre Supabase project. Provider keys, the initial owner account, Gmail authorization and live provider verification still require completion. WhatsApp Cloud API approved-template delivery is implemented through a separate guarded owner/admin endpoint; both require provider credentials, verified sender setup and live verification. WhatsApp inbound webhook/reply synchronisation remains pending. Migration 012 is applied; deployment remains pending.
 
 ## Live prospect research
 - Authenticated company users can request live web research through the server-side Tavily adapter.
@@ -38,7 +38,7 @@ Database migrations and live AI providers still require configuration. Gmail ema
 - The browser never receives provider credentials. The server uses the Supabase service-role key only after verifying the user's bearer token and organization membership.
 
 ## Database migration order
-Apply these migrations, in order, only to the new dedicated Business Command Centre Supabase project:
+These migrations have been applied in order to the dedicated Business Command Centre Supabase project:
 1. `supabase/migrations/20261121000100_command_centre_core.sql`
 2. `supabase/migrations/20261121000200_ai_manager_persistence_and_limits.sql`
 3. `supabase/migrations/20261121000300_dashboard_operational_records.sql`
@@ -49,7 +49,7 @@ Apply these migrations, in order, only to the new dedicated Business Command Cen
 8. `supabase/migrations/20261121000800_task_management.sql`
 9. `supabase/migrations/20261121000900_service_role_data_api_grants.sql`\n10. `supabase/migrations/20261121001000_private_rls_helpers.sql`\n11. `supabase/migrations/20261121001100_foreign_key_indexes.sql`\n12. `supabase/migrations/20261121001200_gmail_oauth_integrations.sql`
 
-Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
+Do not apply these migrations to Samzy School Cloud. The dedicated Business Command Centre project has migrations 001–012 applied.
 
 ## Dashboard operational modules
 The authenticated dashboard workspace API provides organisation-scoped reads and writes for prospects, clients, projects, finance transactions and approval requests; CRM and project records support audited status updates, and projects can be linked to same-organisation clients and prospects and assigned to registered Samzy products. Prospects have a fit score, canonical website duplicate checks, transactional prospect-to-client conversion with source linkage and audit history, and organisation-scoped contact-point capture. Contact points are unverified by default; email addresses are normalised, and the AI context receives contact-channel verification counts without receiving the stored contact addresses. Product registry supports product registration. Sales & Outreach stores eligible drafts and supports owner/admin-initiated email delivery through the guarded Gmail adapter; WhatsApp first-contact sending is not enabled. Approval decisions are restricted to owners and administrators. Finance totals use a database aggregate function rather than summing only the visible transaction page. The dashboard requires migrations 003, 004 and 005 before the latest CRM and AI Manager features can load. The AI General Manager uses a single organisation-wide conversation and receives a bounded, read-only snapshot of recent prospects, clients, projects, approvals, outreach events, financial aggregates, recent AI runs and audit events, alongside approved company memory, current conversation and source-linked live research when configured. Snapshot records are organisation-scoped and timestamped; the assistant must distinguish loaded recent records from all-time totals and cannot claim access to activity outside connected systems.
@@ -73,13 +73,13 @@ Vercel deployment and production environment configuration are intentionally def
 - Approval calls a database transaction that rechecks the approver's organisation role, locks the pending request, validates organisation ownership of linked records, performs the whitelisted operation, and writes an audit event. External messaging, payments, contracts, final pricing and deletions are not executable actions.
 - The Approvals screen includes an AI-assisted prospect proposal form and a queue for reviewing and executing action requests.
 - The automated browser suite tests owner auto-execution of an explicit low-risk prospect action and the manager/owner review queue. Browser tests mock the API; they do not prove live PostgreSQL transaction behaviour.
-- Apply migration 007 after migrations 001–006. It has not been applied to a live database.
+- Migration 007 is applied after migrations 001–006.
 
 
 ## Task management
 - Organisation-scoped tasks support priorities, due dates, statuses and optional links to same-organisation projects, clients and prospects.
 - Task creation validates linked records server-side; status changes are audited.
-- Apply migration 008 after migrations 001–007. It has not been applied to a live database.
+- Migration 008 is applied after migrations 001–007.
 
 
 ## Outreach draft safety
