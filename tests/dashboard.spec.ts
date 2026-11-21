@@ -39,8 +39,9 @@ async function connectMockWorkspace(page: import("@playwright/test").Page) {
     }
     if (request.method() === "PATCH") {
       const input = request.postDataJSON() as Record<string, any>;
-      const item = records.approvals.find(x => x.id === input.id);
-      if (item) item.status = input.decision;
+      const key = input.type === "approval" ? "approvals" : input.type === "prospect" ? "prospects" : input.type === "project" ? "projects" : "clients";
+      const item = records[key].find(x => x.id === input.id);
+      if (item) item.status = input.type === "approval" ? input.decision : input.status;
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: item ?? input }) });
       return;
     }
@@ -189,6 +190,10 @@ test("authenticated dashboard can add a prospect to CRM", async ({ page }) => {
   await page.getByRole("button", { name: "Save prospect" }).click();
   await expect.poll(() => records.prospects.length).toBe(1);
   await expect(page.getByText("Prospect Test Company")).toBeVisible();
+  const row = page.locator(".record-row").filter({ hasText: "Prospect Test Company" });
+  await row.locator("select").selectOption("qualified");
+  await row.getByRole("button", { name: "Save status" }).click();
+  await expect.poll(() => records.prospects[0].status).toBe("qualified");
 });
 
 test("authenticated dashboard can create a project", async ({ page }) => {
@@ -199,6 +204,10 @@ test("authenticated dashboard can create a project", async ({ page }) => {
   await page.getByRole("button", { name: "Create project" }).click();
   await expect.poll(() => records.projects.length).toBe(1);
   await expect(page.getByText("Test Website Project")).toBeVisible();
+  const row = page.locator(".record-row").filter({ hasText: "Test Website Project" });
+  await row.locator("select").selectOption("in_progress");
+  await row.getByRole("button", { name: "Save status" }).click();
+  await expect.poll(() => records.projects[0].status).toBe("in_progress");
 });
 
 test("authenticated company user can sign out", async ({ page }) => {
