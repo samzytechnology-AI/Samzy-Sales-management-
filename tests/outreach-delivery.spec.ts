@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { sendEmailWithResend } from "../src/lib/outreach/resend";
+import { ResendDeliveryError, sendEmailWithResend } from "../src/lib/outreach/resend";
 
 test("Resend adapter sends one recipient with a stable idempotency key", async () => {
   let captured: RequestInit | undefined;
@@ -46,4 +46,10 @@ test("Resend adapter requires a provider message identifier", async () => {
     idempotencyKey: "draft-789",
     fetcher: async () => new Response(JSON.stringify({}), { status: 200 }),
   })).rejects.toThrow("no message identifier");
+});
+
+test("Resend server errors are ambiguous while client rejections are definitive", () => {
+  expect(new ResendDeliveryError(503).ambiguous).toBe(true);
+  expect(new ResendDeliveryError(422).ambiguous).toBe(false);
+  expect(new ResendDeliveryError(408).ambiguous).toBe(true);
 });
