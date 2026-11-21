@@ -33,7 +33,7 @@ const createSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("project"), project_name: z.string().trim().min(2).max(160), status: z.enum(["planned","in_progress","blocked","review","delivered","cancelled"]).default("planned"), quoted_amount_ngn: z.number().int().nonnegative().optional(), due_at: z.string().datetime().optional() }),
   z.object({ type: z.literal("prospect"), company_name: z.string().trim().min(2).max(160), website_url: z.string().url().max(2048).optional().or(z.literal("")), industry: z.string().trim().max(100).optional(), country: z.string().trim().max(80).optional(), research_summary: z.string().trim().max(3000).optional() }),
   z.object({ type: z.literal("finance"), direction: z.enum(["income","expense"]), category: z.string().trim().min(2).max(80), description: z.string().trim().min(3).max(300), amount_ngn: z.number().int().positive().max(1_000_000_000_000), status: z.enum(["recorded","pending","void"]).default("recorded"), occurred_at: z.string().date().optional() }),
-  z.object({ type: z.literal("approval"), title: z.string().trim().min(3).max(160), description: z.string().trim().min(5).max(2000), category: z.enum(["outreach","pricing","contract","payment","delivery","other"]) }),
+  z.object({ type: z.literal("product"), product_name: z.string().trim().min(2).max(120), product_key: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/), dashboard_url: z.string().url().max(2048).optional().or(z.literal("")), integration_mode: z.enum(["manual","api","webhook","oauth"]).default("manual"), capabilities: z.array(z.string().trim().min(1).max(60)).max(30).default([]) }),\n  z.object({ type: z.literal("approval"), title: z.string().trim().min(3).max(160), description: z.string().trim().min(5).max(2000), category: z.enum(["outreach","pricing","contract","payment","delivery","other"]) }),
 ]);
 
 export async function GET(request: NextRequest) {
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     if (new TextEncoder().encode(raw).byteLength > 16_384) return error("Request is too large.", 413);
     const input = createSchema.parse(JSON.parse(raw));
     const { db, organizationId, user } = auth;
-    const table = input.type === "client" ? "clients" : input.type === "project" ? "projects" : input.type === "prospect" ? "prospects" : input.type === "finance" ? "financial_transactions" : "approval_requests";
+    const table = input.type === "client" ? "clients" : input.type === "project" ? "projects" : input.type === "prospect" ? "prospects" : input.type === "finance" ? "financial_transactions" : input.type === "product" ? "product_registry" : "approval_requests";
     const payload: Record<string, unknown> = { ...input, organization_id: organizationId };
     delete payload.type;
     if (input.type === "finance") payload.recorded_by = user.id;
