@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const synthesisAvailable = !result.warnings.some(warning => warning.startsWith("Synthesis pass failed"));
+    const synthesisAvailable = result.contributions.length === 3 && !result.warnings.some(warning => warning.startsWith("Synthesis pass failed"));
     const proposalExtraction = extractAIActionProposal(result.synthesis, synthesisAvailable);
     const runWarnings = [...result.warnings];
     if (proposalExtraction.warning) runWarnings.push(proposalExtraction.warning);
