@@ -36,6 +36,7 @@ const createSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("finance"), direction: z.enum(["income","expense"]), category: z.string().trim().min(2).max(80), description: z.string().trim().min(3).max(300), amount_ngn: z.number().int().positive().max(1_000_000_000_000), status: z.enum(["recorded","pending","void"]).default("recorded"), occurred_at: z.string().date().optional() }),
   z.object({ type: z.literal("product"), product_name: z.string().trim().min(2).max(120), product_key: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/), dashboard_url: z.string().url().max(2048).optional().or(z.literal("")), integration_mode: z.enum(["manual","api","webhook","oauth"]).default("manual"), capabilities: z.array(z.string().trim().min(1).max(60)).max(30).default([]) }),
   z.object({ type: z.literal("approval"), title: z.string().trim().min(3).max(160), description: z.string().trim().min(5).max(2000), category: z.enum(["outreach","pricing","contract","payment","delivery","other"]) }),
+  z.object({ type: z.literal("task"), title: z.string().trim().min(2).max(180), description: z.string().trim().max(2000).optional(), status: z.enum(["open","in_progress","blocked","completed","cancelled"]).default("open"), priority: z.enum(["low","normal","high","urgent"]).default("normal"), due_at: z.string().datetime().optional(), project_id: uuid.optional().or(z.literal("")), client_id: uuid.optional().or(z.literal("")), prospect_id: uuid.optional().or(z.literal("")) }),
 ]);
 
 export async function GET(request: NextRequest) {
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
     const { db, organizationId } = auth;
     const moduleName = request.nextUrl.searchParams.get("module") ?? "overview";
 
-    const [prospectsCount, clientsCount, projectsCount, approvalsCount, prospects, clients, projects, products, approvals, finance, financialSummary] = await Promise.all([
+    const [prospectsCount, clientsCount, projectsCount, approvalsCount, prospects, clients, projects, products, approvals, finance, financialSummary, tasks] = await Promise.all([
       db.from("prospects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
       db.from("clients").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
       db.from("projects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).in("status", ["in_progress","blocked","review"]),
@@ -57,8 +58,9 @@ export async function GET(request: NextRequest) {
       moduleName === "approvals" ? db.from("approval_requests").select("id,title,description,category,status,decision_note,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
       moduleName === "finance" || moduleName === "overview" ? db.from("financial_transactions").select("id,direction,category,description,amount_ngn,status,occurred_at,created_at").eq("organization_id", organizationId).order("occurred_at", { ascending: false }).limit(500) : Promise.resolve({ data: [], error: null }),
       db.rpc("get_financial_summary", { p_organization_id: organizationId }),
+      moduleName === "tasks" || moduleName === "overview" ? db.from("tasks").select("id,title,description,status,priority,due_at,project_id,client_id,prospect_id,created_at,updated_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(200) : Promise.resolve({ data: [], error: null }),
     ]);
-    const errors = [prospectsCount,clientsCount,projectsCount,approvalsCount,prospects,clients,projects,products,approvals,finance,financialSummary].filter(x => x.error);
+    const errors = [prospectsCount,clientsCount,projectsCount,approvalsCount,prospects,clients,projects,products,approvals,finance,financialSummary,tasks].filter(x => x.error);
     if (errors.length) throw new Error("One or more dashboard records could not be loaded. Check whether the latest dashboard migration has been applied.");
     const contactPoints = moduleName === "prospects" || moduleName === "overview" ? await db.from("contact_points").select("id,prospect_id,channel,address,is_verified,consent_basis,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300) : { data: [], error: null };
     if (contactPoints.error) throw new Error("CRM contact points could not be loaded.");
@@ -79,7 +81,7 @@ export async function GET(request: NextRequest) {
         netNgn: Number(totals?.net_ngn ?? income - expenses),
       },
       prospects: prospects.data ?? [], clients: clients.data ?? [], projects: projects.data ?? [],
-      products: products.data ?? [], approvals: approvals.data ?? [], finance: transactions, outreach: outreach.data ?? [], contactPoints: contactPoints.data ?? [],
+      products: products.data ?? [], approvals: approvals.data ?? [], finance: transactions, outreach: outreach.data ?? [], contactPoints: contactPoints.data ?? [], tasks: tasks.data ?? [],
       module: moduleName,
     }, { headers: noStore });
   } catch (cause) {
@@ -120,16 +122,31 @@ export async function POST(request: NextRequest) {
       const { data: linkedProduct, error: productLookupError } = await db.from("product_registry").select("id").eq("id", input.product_id).eq("organization_id", organizationId).maybeSingle();
       if (productLookupError || !linkedProduct) return error("The selected product does not belong to this company workspace.", 403);
     }
+    if (input.type === "task") {
+      if (input.project_id) {
+        const { data, error: lookupError } = await db.from("projects").select("id").eq("id", input.project_id).eq("organization_id", organizationId).maybeSingle();
+        if (lookupError || !data) return error("The selected project does not belong to this company workspace.", 403);
+      }
+      if (input.client_id) {
+        const { data, error: lookupError } = await db.from("clients").select("id").eq("id", input.client_id).eq("organization_id", organizationId).maybeSingle();
+        if (lookupError || !data) return error("The selected client does not belong to this company workspace.", 403);
+      }
+      if (input.prospect_id) {
+        const { data, error: lookupError } = await db.from("prospects").select("id").eq("id", input.prospect_id).eq("organization_id", organizationId).maybeSingle();
+        if (lookupError || !data) return error("The selected prospect does not belong to this company workspace.", 403);
+      }
+    }
     if (input.type === "project" && input.prospect_id) {
       const { data: linkedProspect, error: prospectLookupError } = await db.from("prospects").select("id").eq("id", input.prospect_id).eq("organization_id", organizationId).maybeSingle();
       if (prospectLookupError || !linkedProspect) return error("The selected prospect does not belong to this company workspace.", 403);
     }
-    const table = input.type === "client" ? "clients" : input.type === "project" ? "projects" : input.type === "prospect" ? "prospects" : input.type === "contact_point" ? "contact_points" : input.type === "finance" ? "financial_transactions" : input.type === "product" ? "product_registry" : "approval_requests";
+    const table = input.type === "client" ? "clients" : input.type === "project" ? "projects" : input.type === "prospect" ? "prospects" : input.type === "contact_point" ? "contact_points" : input.type === "finance" ? "financial_transactions" : input.type === "product" ? "product_registry" : input.type === "task" ? "tasks" : "approval_requests";
     const payload: Record<string, unknown> = { ...input, organization_id: organizationId };
     if (normalizedProspectWebsite) payload.website_url = normalizedProspectWebsite;
     if (input.type === "contact_point") payload.address = input.channel === "email" ? input.address.toLowerCase() : input.address;
     delete payload.type;
     if (input.type === "finance") payload.recorded_by = user.id;
+    if (input.type === "task") payload.created_by = user.id;
     if (input.type === "approval") payload.requested_by = user.id;
     const { data, error: insertError } = await db.from(table).insert(payload).select("*").single();
     if (insertError || !data) return error("The record could not be saved. Check required fields and database migrations.", 400);
@@ -147,6 +164,7 @@ const patchSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("prospect"), id: uuid, status: z.enum(["discovered","researching","qualified","contacted","replied","opportunity","disqualified"]) }),
   z.object({ type: z.literal("project"), id: uuid, status: z.enum(["planned","in_progress","blocked","review","delivered","cancelled"]) }),
   z.object({ type: z.literal("client"), id: uuid, status: z.enum(["active","inactive","on_hold"]) }),
+  z.object({ type: z.literal("task"), id: uuid, status: z.enum(["open","in_progress","blocked","completed","cancelled"]) }),
 ]);
 export async function PATCH(request: NextRequest) {
   try {
@@ -175,7 +193,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ record: data }, { headers: noStore });
     }
 
-    const table = input.type === "prospect" ? "prospects" : input.type === "project" ? "projects" : "clients";
+    const table = input.type === "prospect" ? "prospects" : input.type === "project" ? "projects" : input.type === "task" ? "tasks" : "clients";
     const { data, error: updateError } = await auth.db.from(table).update({
       status: input.status, updated_at: new Date().toISOString(),
     }).eq("id", input.id).eq("organization_id", auth.organizationId).select("id,status").maybeSingle();
