@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 
-async function connectMockWorkspace(page: import("@playwright/test").Page) {
+async function connectMockWorkspace(page: import("@playwright/test").Page, sharedHistory = false) {
   const user = {
     id: "55555555-5555-4555-8555-555555555555",
     aud: "authenticated",
@@ -16,7 +16,16 @@ async function connectMockWorkspace(page: import("@playwright/test").Page) {
   const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [], contactPoints: [] };
 
   await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(session) }));
-  await page.route("**/api/ai/run", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: null, messages: [] }) }));
+  await page.route("**/api/ai/run", route => {
+    if (route.request().method() === "GET") {
+      const messages = sharedHistory ? [
+        { id: "shared-user-message", role: "user", actor_user_id: "66666666-6666-4666-8666-666666666666", content: "Shared company handover note." },
+        { id: "shared-ai-message", role: "assistant", actor_user_id: null, content: "I have loaded the shared company context." },
+      ] : [];
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: sharedHistory ? "77777777-7777-4777-8777-777777777777" : null, messages }) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: "77777777-7777-4777-8777-777777777777", synthesis: "Mock AI response", warnings: [] }) });
+  });
   await page.route("**/api/workspace**", async route => {
     const request = route.request();
     if (request.method() === "GET") {
@@ -284,4 +293,12 @@ test("CRM stores prospect contact points as unverified until verification occurs
   await expect.poll(() => records.contactPoints.length).toBe(1);
   expect(records.contactPoints[0].address).toBe("sales@example.com");
   await expect(row.locator(".contact-points")).toContainText("Unverified");
+});
+
+test("AI General Manager restores shared company history with team attribution", async ({ page }) => {
+  await connectMockWorkspace(page, true);
+  await expect(page.locator(".messages")).toContainText("Shared company handover note.");
+  await expect(page.locator(".messages")).toContainText("Company team");
+  await expect(page.locator(".messages")).toContainText("I have loaded the shared company context.");
+  await expect(page.locator(".messages")).toContainText("AI General Manager");
 });
