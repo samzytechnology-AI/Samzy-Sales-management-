@@ -1,4 +1,5 @@
 import type { CoordinatedResult, ModelAdapter, ModelRequest } from "./types";
+import { SAMZY_REVENUE_PLAYBOOK } from "./sales-playbook";
 
 /** Three independent agents share one objective; a second pass produces a unified synthesis. */
 export async function coordinateModels(request: ModelRequest, adapters: ModelAdapter[]): Promise<CoordinatedResult> {
@@ -7,7 +8,19 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
     throw new Error("Model slots A, B and C must each be configured once.");
   }
 
-  const settled = await Promise.allSettled(adapters.map((adapter) => adapter.generate(request)));
+  const agentMandates = {
+    A: "ROLE: Prospect intelligence analyst. Verify business facts, customer journey, fit, reachable decision-maker and strongest evidence-backed commercial opportunity. Flag unknowns; do not write generic pitches.",
+    B: "ROLE: Revenue strategist and conversion copywriter. Translate the verified opportunity into a credible business benefit and a short interest-first message. Model likely replies and concise next responses without claiming certainty.",
+    C: "ROLE: Independent sales critic and deal coach. Challenge unsupported assumptions, assess objections and conversion friction, improve the message, and recommend the safest high-value next step.",
+  } as const;
+  const enrichedRequest: ModelRequest = {
+    ...request,
+    objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SAMZY_REVENUE_PLAYBOOK].join("\n\n"),
+  };
+  const settled = await Promise.allSettled(adapters.map((adapter) => adapter.generate({
+    ...enrichedRequest,
+    context: { ...enrichedRequest.context, agentMandate: agentMandates[adapter.slot], independentAnalysis: true },
+  })));
   const contributions = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
   const warnings = settled.flatMap((result, index) =>
     result.status === "rejected"
@@ -25,7 +38,9 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
         "Synthesize the independent model contributions into one decision-ready answer.",
         "Preserve the original objective. Identify agreement, meaningful disagreements, unsupported claims, and missing evidence.",
         "Do not treat majority agreement as proof. Do not invent facts or citations.",
-        "Return: Executive answer; Evidence-backed findings; Disagreements/risks; Recommended next actions; Confidence and unknowns.",
+        "For prospect_discovery, company_research, lead_qualification, outreach_draft and reply_analysis, produce: verified snapshot; strongest evidenced opportunity; practical benefit and plausible revenue pathway; concise first message (35–65 words); likely reply scenarios with calibrated confidence or insufficient evidence; exact short next reply for each; conversion next step; risks and unknowns.",
+        "The first message must earn a reply, not attempt to close. Make the business benefit immediately clear. Keep client-facing drafts concise and natural.",
+        "Return an executive decision, evidence-backed findings, disagreements/risks, recommended next actions, and confidence/unknowns.",
         "If and only if the original user explicitly requested one supported company operation and all required details are present, append exactly one [[SAMZY_ACTION_PROPOSAL]] JSON marker containing action_type, summary and a schema-valid payload. Never propose an action based only on a recommendation. Do not propose outreach delivery, payments, contracts, final prices or deletions. If details are missing, ask a question and omit the marker.",
       ].join(" "),
       context: {
