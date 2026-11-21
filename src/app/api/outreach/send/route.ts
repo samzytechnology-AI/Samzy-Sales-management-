@@ -64,34 +64,40 @@ export async function POST(request: NextRequest) {
     return fail("Sending requires a verified email contact and a recorded consent/source basis.", 409);
   }
 
-  const [suppression, recent, latest, inbound, prospect] = await Promise.all([
+  const [suppression, recent, total, latest, latestInbound, prospect] = await Promise.all([
     db.from("suppression_list").select("id").eq("organization_id", organizationId)
       .eq("channel", "email").eq("normalized_address", normalizedAddress).maybeSingle(),
     db.from("outreach_events").select("id", { count: "exact", head: true })
       .eq("organization_id", organizationId).eq("channel", "email").eq("recipient", normalizedAddress)
-      .eq("direction", "outbound").neq("status", "draft")
+      .eq("direction", "outbound").in("status", ["sent","send_unknown","sending"])
       .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+    db.from("outreach_events").select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId).eq("channel", "email").eq("recipient", normalizedAddress)
+      .eq("direction", "outbound").in("status", ["sent","send_unknown","sending"]),
     db.from("outreach_events").select("created_at").eq("organization_id", organizationId)
       .eq("channel", "email").eq("recipient", normalizedAddress).eq("direction", "outbound")
-      .neq("status", "draft").order("created_at", { ascending: false }).limit(1),
-    db.from("outreach_events").select("id").eq("organization_id", organizationId)
+      .in("status", ["sent","send_unknown","sending"]).order("created_at", { ascending: false }).limit(1),
+    db.from("outreach_events").select("created_at").eq("organization_id", organizationId)
       .eq("channel", "email").eq("recipient", normalizedAddress).eq("direction", "inbound")
-      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()).limit(1),
+      .order("created_at", { ascending: false }).limit(1),
     db.from("prospects").select("company_name").eq("id", event.prospect_id)
       .eq("organization_id", organizationId).maybeSingle(),
   ]);
-  if (suppression.error || recent.error || latest.error || inbound.error || prospect.error) {
+  if (suppression.error || recent.error || total.error || latest.error || latestInbound.error || prospect.error) {
     return fail("Could not complete the outreach eligibility checks. No message was sent.", 503);
   }
   if (suppression.data) return fail("This address has opted out and is suppressed. No message was sent.", 409);
-  if (inbound.data?.length) return fail("This recipient has an active conversation. Reply in the existing conversation instead of sending a new cold outreach.", 409);
+  const lastOutboundAt = latest.data?.[0]?.created_at;
+  const lastInboundAt = latestInbound.data?.[0]?.created_at;
+  const activeConversation = Boolean(lastInboundAt && (!lastOutboundAt || lastInboundAt > lastOutboundAt) && Date.now() - new Date(lastInboundAt).getTime() < 30 * 24 * 60 * 60 * 1000);
 
   const eligibility = evaluateOutreach({
     normalizedAddress,
     optedOut: false,
-    lastContactAt: latest.data?.[0]?.created_at,
+    lastContactAt: lastOutboundAt,
     contactCount30d: recent.count ?? 0,
-    activeConversation: false,
+    totalOutboundCount: total.count ?? 0,
+    activeConversation,
   }, "email");
   if (!eligibility.allowed) return fail(eligibility.reason, 409);
 
