@@ -5,6 +5,25 @@ alter table public.ai_conversations
   add column if not exists scope text not null default 'personal'
   check (scope in ('personal','company'));
 
+create or replace function public.can_access_company_ai(target_org uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select exists (
+    select 1 from public.organization_members
+    where organization_id = target_org
+      and user_id = auth.uid()
+      and role in ('owner','admin','manager')
+  );
+$;
+revoke all on function public.can_access_company_ai(uuid) from public;
+revoke all on function public.can_access_company_ai(uuid) from anon;
+grant execute on function public.can_access_company_ai(uuid) to authenticated;
+grant execute on function public.can_access_company_ai(uuid) to service_role;
+
 create unique index if not exists ai_conversations_one_active_company_idx
   on public.ai_conversations(organization_id)
   where scope = 'company' and status = 'active';
@@ -17,32 +36,32 @@ drop policy if exists "members read messages in own company conversations" on pu
 create policy "members read permitted company conversations"
   on public.ai_conversations for select
   using (
-    public.is_org_member(organization_id)
+    public.can_access_company_ai(organization_id)
     and (scope = 'company' or created_by = auth.uid())
   );
 
 create policy "members create company conversations"
   on public.ai_conversations for insert
   with check (
-    public.is_org_member(organization_id)
+    public.can_access_company_ai(organization_id)
     and created_by = auth.uid()
   );
 
 create policy "members update permitted company conversations"
   on public.ai_conversations for update
   using (
-    public.is_org_member(organization_id)
+    public.can_access_company_ai(organization_id)
     and (scope = 'company' or created_by = auth.uid())
   )
   with check (
-    public.is_org_member(organization_id)
+    public.can_access_company_ai(organization_id)
     and (scope = 'company' or created_by = auth.uid())
   );
 
 create policy "members read messages in permitted company conversations"
   on public.ai_messages for select
   using (
-    public.is_org_member(organization_id)
+    public.can_access_company_ai(organization_id)
     and exists (
       select 1 from public.ai_conversations c
       where c.id = conversation_id
