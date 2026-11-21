@@ -117,7 +117,6 @@ export async function POST(request: NextRequest) {
 
   const companyName = prospect.data?.company_name?.trim() || "your business";
   try {
-    const { accessToken } = await getGmailAccessToken(organizationId);
     const sent = await sendEmailWithGmail({
       accessToken,
       to: normalizedAddress,
