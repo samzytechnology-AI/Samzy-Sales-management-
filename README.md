@@ -39,3 +39,11 @@ Do not apply these migrations to Samzy School Cloud. The current repository is p
 
 ## Deployment boundary
 Vercel deployment and production environment configuration are intentionally deferred until the application code and verification pass are complete. At deployment time, add server-side provider keys and `SUPABASE_SERVICE_ROLE_KEY` as protected Vercel environment variables. Only the Supabase URL and anon/public key may be exposed to the browser.
+
+## Dashboard interaction tests
+- Install dependencies with `npm install`.
+- Build the production app with `npm run build`.
+- Install the Playwright Chromium browser with `npx playwright install chromium`.
+- Run dashboard browser tests with `npm run test:e2e`.
+- The current browser suite covers all primary navigation items, the AI Manager call-to-action, quick commands, suggested prompts, chat submission and the disconnected-workspace sign-in state.
+- These tests verify interface behavior only. They do not prove live Supabase authentication, provider API calls, database persistence, real outbound delivery or production deployment.
