@@ -99,11 +99,22 @@ begin
   v_id := null;
   case v_request.action_type
     when 'create_prospect' then
-      insert into public.prospects(organization_id,company_name,website_url,industry,country,fit_score,research_summary)
-      values(p_organization_id, v_payload->>'company_name', nullif(v_payload->>'website_url',''),
-        nullif(v_payload->>'industry',''), nullif(v_payload->>'country',''),
-        nullif(v_payload->>'fit_score','')::integer, nullif(v_payload->>'research_summary',''))
-      returning id into v_id;
+      -- Reuse an existing prospect for the same canonical website instead of
+      -- failing on the organisation-scoped case-insensitive unique index.
+      if nullif(v_payload->>'website_url','') is not null then
+        select id into v_id
+        from public.prospects
+        where organization_id=p_organization_id
+          and lower(website_url)=lower(v_payload->>'website_url')
+        limit 1;
+      end if;
+      if v_id is null then
+        insert into public.prospects(organization_id,company_name,website_url,industry,country,fit_score,research_summary)
+        values(p_organization_id, v_payload->>'company_name', nullif(v_payload->>'website_url',''),
+          nullif(v_payload->>'industry',''), nullif(v_payload->>'country',''),
+          nullif(v_payload->>'fit_score','')::integer, nullif(v_payload->>'research_summary',''))
+        returning id into v_id;
+      end if;
     when 'update_prospect_status' then
       update public.prospects
       set status=v_payload->>'status', updated_at=now()
