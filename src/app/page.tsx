@@ -46,7 +46,7 @@ export default function Home() {
   const [orgId,setOrgId] = useState("");
   const [conversationId,setConversationId] = useState<string|null>(null);
   const [token,setToken] = useState("");
-  const [currentUserId,setCurrentUserId] = useState("");\n  const [gmailMessages,setGmailMessages] = useState<GmailMessage[]>([]);\n  const [gmailMailbox,setGmailMailbox] = useState("");\n  const [gmailBusy,setGmailBusy] = useState(false);\n  const [gmailError,setGmailError] = useState("");
+  const [currentUserId,setCurrentUserId] = useState("");\n  const [gmailMessages,setGmailMessages] = useState<GmailMessage[]>([]);\n  const [gmailReplyDrafts,setGmailReplyDrafts] = useState<Record<string,string>>({});\n  const [gmailMailbox,setGmailMailbox] = useState("");\n  const [gmailBusy,setGmailBusy] = useState(false);\n  const [gmailError,setGmailError] = useState("");
   const [authText,setAuthText] = useState("");
   const [draft,setDraft] = useState("");
   const [busy,setBusy] = useState(false);
@@ -256,6 +256,20 @@ export default function Home() {
     }catch(error){setGmailError(error instanceof Error?error.message:"Inbox sync failed.");}
     finally{setGmailBusy(false);}
   }
+  async function sendGmailReply(message:GmailMessage){
+    const body=(gmailReplyDrafts[message.id]??"").trim();
+    if(!body||!token||!orgId.trim())return;
+    if(!window.confirm(`Send this reply to the sender of "${message.subject||"this email"}" from the connected Samzy Gmail mailbox?`))return;
+    setGmailBusy(true);setGmailError("");
+    try{
+      const response=await fetch("/api/integrations/gmail/reply",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({messageId:message.id,threadId:message.threadId,body,approved:true})});
+      const result=await response.json();if(!response.ok||!result.sent)throw new Error(result.error??"Gmail reply was not sent.");
+      setGmailReplyDrafts(old=>({...old,[message.id]:""}));
+      setGmailError(`Reply sent to ${result.recipient}.`);
+      await syncGmail();
+    }catch(error){setGmailError(error instanceof Error?error.message:"Gmail reply could not be sent.");}
+    finally{setGmailBusy(false);}
+  }
   function analyseGmailMessage(message:GmailMessage){
     void send([
       "Analyse this incoming Gmail message and prepare a human, context-aware reply. Do not send anything.",
@@ -438,7 +452,7 @@ export default function Home() {
                 {gmailMailbox?<p><b>Connected mailbox:</b> {gmailMailbox}</p>:null}
                 {gmailError?<p className="module-alert">{gmailError}</p>:null}
                 <div className="record-list">
-                  {gmailMessages.map(message=><div className="record-row" key={message.id}><div><b>{message.subject||"(No subject)"}</b><small>{message.from} · {message.date}</small><p>{message.snippet}</p></div><button className="inline-action" type="button" onClick={()=>analyseGmailMessage(message)}>Analyse with AI ↗</button></div>)}
+                  {gmailMessages.map(message=><div className="record-row" key={message.id}><div><b>{message.subject||"(No subject)"}</b><small>{message.from} · {message.date}</small><p>{message.snippet}</p><textarea aria-label={`Reply draft for ${message.subject}`} rows={3} value={gmailReplyDrafts[message.id]??""} onChange={e=>setGmailReplyDrafts(old=>({...old,[message.id]:e.target.value}))} placeholder="Paste or write your approved reply here…"/></div><div className="form-actions"><button className="inline-action" type="button" onClick={()=>analyseGmailMessage(message)}>Analyse with AI ↗</button><button className="primary" type="button" disabled={gmailBusy||!(gmailReplyDrafts[message.id]??"").trim()} onClick={()=>void sendGmailReply(message)}>Send reply</button></div></div>)}
                   {!gmailMessages.length?<p className="empty">Connect Gmail and sync the inbox to review incoming messages.</p>:null}
                 </div>
               </div>
