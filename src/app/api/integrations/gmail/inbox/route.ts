@@ -6,6 +6,27 @@ import { getGmailAccessToken } from "@/lib/gmail/tokens";
 export const runtime = "nodejs";
 const uuid = z.string().uuid();
 const noStore = { "Cache-Control": "no-store" };
+type GmailPart = { mimeType?: string; body?: { data?: string }; parts?: GmailPart[] };
+function collectText(part: GmailPart, type: "text/plain" | "text/html", output: string[]) {
+  if (part.mimeType === type && part.body?.data) output.push(Buffer.from(part.body.data, "base64url").toString("utf8"));
+  for (const child of part.parts ?? []) collectText(child, type, output);
+}
+function extractBody(payload?: GmailPart): string {
+  if (!payload) return "";
+  const plain: string[] = [];
+  collectText(payload, "text/plain", plain);
+  let value = plain.join("\n\n");
+  if (!value) {
+    const html: string[] = [];
+    collectText(payload, "text/html", html);
+    value = html.join(" ").replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'");
+  }
+  return value.replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 12_000);
+}
+
 export async function GET(request: NextRequest) {
   const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   const organizationId = request.headers.get("x-organization-id") ?? "";
@@ -43,7 +64,8 @@ export async function GET(request: NextRequest) {
         from: header("From").slice(0, 300),
         subject: header("Subject").slice(0, 300),
         date: header("Date").slice(0, 100),
-        snippet: (message.snippet ?? "").slice(0, 1_000),\n        body: extractBody(message.payload),
+        snippet: (message.snippet ?? "").slice(0, 1_000),
+        body: extractBody(message.payload),
       };
     }));
     return NextResponse.json({
