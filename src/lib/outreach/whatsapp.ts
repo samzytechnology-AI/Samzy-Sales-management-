@@ -16,12 +16,15 @@ export interface WhatsAppTemplateInput {
   language: string;
   bodyText: string;
   idempotencyKey: string;
+  graphApiVersion?: string;
   fetcher?: typeof fetch;
 }
 /** Sends only an approved Meta template with exactly one body text parameter. */
 export async function sendWhatsAppTemplate(input: WhatsAppTemplateInput): Promise<{ messageId: string }> {
   const fetcher = input.fetcher ?? fetch;
-  const response = await fetcher(`https://graph.facebook.com/v22.0/${encodeURIComponent(input.phoneNumberId)}/messages`, {
+  const version = (input.graphApiVersion ?? "v22.0").replace(/^v?/, "v");
+  if (!/^v\\d+\\.\\d+$/.test(version)) throw new Error("Invalid WhatsApp Graph API version.");
+  const response = await fetcher(`https://graph.facebook.com/${version}/${encodeURIComponent(input.phoneNumberId)}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${input.accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
