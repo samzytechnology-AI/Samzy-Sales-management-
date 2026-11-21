@@ -10,13 +10,6 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
     throw new Error("Each configured model slot must appear only once.");
   }
 
-  const agentMandates: Record<string, string> = {
-    A: "ROLE: Prospect intelligence analyst. Verify business facts, customer journey, fit, reachable decision-maker and strongest evidence-backed commercial opportunity. Flag unknowns; do not write generic pitches.",
-    B: "ROLE: Revenue strategist and conversion copywriter. Translate the verified opportunity into a credible business benefit and a short interest-first message. Model likely replies and concise next responses without claiming certainty.",
-    C: "ROLE: Independent sales critic and deal coach. Challenge unsupported assumptions, assess objections and conversion friction, improve the message, and recommend the safest high-value next step.",
-    D: "ROLE: Independent executive analyst. Challenge the proposed strategy, test operational feasibility, quantify risks where evidence permits, and identify the highest-leverage next action.",
-    E: "ROLE: Independent quality and evidence auditor. Check source support, identify contradictions, detect fabricated or overstated claims, and state what evidence is still missing.",
-  };
   const enrichedRequest: ModelRequest = {
     ...request,
     objective: [request.objective, "Apply the mandatory Samzy revenue-conversion playbook below.", SALES_CONVERSION_PLAYBOOK, "Apply the end-to-end company operating lifecycle below.", SAMZY_BUSINESS_LIFECYCLE, "Use the official Samzy service catalogue and prospect-matching rules below. The structured catalogue is also supplied in context; treat it as the source of truth.", renderSamzyServiceDiscoveryRules()].join("\n\n"),
@@ -36,7 +29,7 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
   };
   const settled = await Promise.allSettled(adapters.map((adapter) => adapter.generate({
     ...enrichedRequest,
-    context: { ...enrichedRequest.context, agentMandate: agentMandates[adapter.slot], independentAnalysis: true },
+    context: { ...enrichedRequest.context, independentAnalysis: true, crossEvaluationInstructions: "You have no fixed or exclusive role. Independently examine the entire task across evidence quality, business fit, operational feasibility, commercial value, risks, objections, alternatives and unknowns. Challenge assumptions and provide your own complete assessment. Do not assume another provider covers any dimension." },
   })));
   const contributions = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
   const warnings = settled.flatMap((result, index) =>
