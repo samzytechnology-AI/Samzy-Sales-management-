@@ -219,7 +219,6 @@ export default function Home() {
       const refreshed=await fetch("/api/workspace?module=outreach",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
       const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Message processed, but outreach history could not be refreshed.");
       setWorkspace(data);
-      if(result.status==="sent")setWorkspaceError("Email accepted by the provider and recorded as sent.");
     }catch(err){setWorkspaceError(err instanceof Error?err.message:"The outreach message could not be sent.");}
     finally{setSaveBusy(false);}
   }
