@@ -24,6 +24,10 @@ create policy "members manage organisation tasks" on public.tasks for all
   using (public.is_org_member(organization_id))
   with check (public.is_org_member(organization_id));
 
+-- The application accesses tasks through authenticated server routes using the service role.
+-- Do not grant anon access; RLS remains enabled for any future authenticated direct access.
+grant select, insert, update, delete on table public.tasks to service_role;
+
 create or replace function public.enforce_task_link_organisation()
 returns trigger
 language plpgsql
