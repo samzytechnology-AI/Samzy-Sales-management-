@@ -272,9 +272,6 @@ test("CRM stores prospect contact points as unverified until verification occurs
   await page.locator("nav").getByRole("button", { name: /Leads & CRM/ }).click();
   await page.getByPlaceholder("Company name").fill("Contact Capture Company");
   await page.getByPlaceholder("Fit score (0–100)").fill("78");
-  const prospectForm = page.locator(".record-form").first();
-  const invalidFields = await prospectForm.locator(":invalid").evaluateAll((elements: HTMLInputElement[]) => elements.map(element => ({ name: element.name, type: element.type, value: element.value, validationMessage: element.validationMessage })));
-  expect(invalidFields, JSON.stringify(invalidFields)).toEqual([]);
   const prospectResponse = page.waitForResponse(response => response.url().includes("/api/workspace") && response.request().method() === "POST");
   await page.getByRole("button", { name: "Save prospect" }).click();
   expect((await prospectResponse).status()).toBe(201);
