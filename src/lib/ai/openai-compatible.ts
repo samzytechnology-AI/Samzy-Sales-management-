@@ -1,4 +1,5 @@
-import type { ModelAdapter, ModelContribution, ModelRequest, ModelSlot } from "./types";\nimport { CLIENT_COMMUNICATION_POLICY } from "./company-identity";
+import type { ModelAdapter, ModelContribution, ModelRequest, ModelSlot } from "./types";
+import { CLIENT_COMMUNICATION_POLICY } from "./company-identity";
 
 export interface OpenAICompatibleConfig {
   slot: ModelSlot;
