@@ -42,9 +42,9 @@ export default function Home() {
   const [actionsBusy,setActionsBusy] = useState(false);
   const [canReviewAI,setCanReviewAI] = useState(false);
   const [actionDraft,setActionDraft] = useState({company_name:"",website_url:"",industry:"",country:"Nigeria",fit_score:"70",research_summary:""});
-  const [email,setEmail] = useState("");
+  const [email,setEmail] = useState("SAMZYTECHNOLOGY");
   const [password,setPassword] = useState("");
-  const [orgId,setOrgId] = useState("");
+  const [orgId,setOrgId] = useState("fde00435-b72a-4650-8a85-eb9baec33d33");
   const [conversationId,setConversationId] = useState<string|null>(null);
   const [token,setToken] = useState("");
   const [currentUserId,setCurrentUserId] = useState("");
