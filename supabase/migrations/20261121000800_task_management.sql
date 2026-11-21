@@ -14,8 +14,7 @@ create table if not exists public.tasks (
   prospect_id uuid references public.prospects(id) on delete set null,
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  check (project_id is not null or client_id is not null or prospect_id is not null or title is not null)
+  updated_at timestamptz not null default now()
 );
 create index if not exists tasks_org_status_due_idx
   on public.tasks(organization_id,status,due_at asc nulls last,created_at desc);
@@ -24,3 +23,28 @@ alter table public.tasks enable row level security;
 create policy "members manage organisation tasks" on public.tasks for all
   using (public.is_org_member(organization_id))
   with check (public.is_org_member(organization_id));
+
+create or replace function public.enforce_task_link_organisation()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.project_id is not null and not exists (
+    select 1 from public.projects where id = new.project_id and organization_id = new.organization_id
+  ) then raise exception 'Task project must belong to the same organisation'; end if;
+  if new.client_id is not null and not exists (
+    select 1 from public.clients where id = new.client_id and organization_id = new.organization_id
+  ) then raise exception 'Task client must belong to the same organisation'; end if;
+  if new.prospect_id is not null and not exists (
+    select 1 from public.prospects where id = new.prospect_id and organization_id = new.organization_id
+  ) then raise exception 'Task prospect must belong to the same organisation'; end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists tasks_enforce_link_organisation on public.tasks;
+create trigger tasks_enforce_link_organisation
+  before insert or update of organization_id, project_id, client_id, prospect_id
+  on public.tasks
+  for each row execute function public.enforce_task_link_organisation();
