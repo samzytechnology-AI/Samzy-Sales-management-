@@ -8,6 +8,7 @@ export async function GET() {
   const configuredCount = providers.filter((provider) => provider.configured).length;
   const emailOutreachReady = Boolean(process.env.RESEND_API_KEY && process.env.OUTREACH_FROM_EMAIL);
   const researchReady = Boolean(process.env.BRAVE_SEARCH_API_KEY);
+  const whatsappOutreachReady = Boolean(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_TEMPLATE_NAME);
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
   return NextResponse.json({
     status: "foundation",
@@ -16,7 +17,7 @@ export async function GET() {
     supabaseConfigured,
     researchReady,
     emailOutreachReady,
-    whatsappOutreachReady: false,
+    whatsappOutreachReady,
     outboundMode: "owner_admin_explicit_send",
     outboundEnabled: emailOutreachReady && supabaseConfigured,
   }, { headers: { "Cache-Control": "no-store" } });
