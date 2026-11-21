@@ -74,8 +74,8 @@ create table if not exists public.contact_points (
   is_verified boolean not null default false,
   consent_basis text,
   created_at timestamptz not null default now(),
-  unique (organization_id, channel, lower(address))
 );
+create unique index if not exists contact_points_org_channel_address_unique on public.contact_points(organization_id, channel, lower(address));
 
 create table if not exists public.suppression_list (
   id uuid primary key default gen_random_uuid(),
