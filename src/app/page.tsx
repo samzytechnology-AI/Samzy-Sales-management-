@@ -5,7 +5,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; outboundEnabled?: boolean };
 type ChatMessage = { role: "user" | "assistant"; content: string; id: number; actorUserId?: string | null };
-type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[]; contactPoints?: any[] };
+type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[]; contactPoints?: any[]; tasks?: any[] };
 type AIAction = { id:string; action_type:string; summary:string; payload:Record<string,unknown>; status:string; requested_by:string; created_at:string; expires_at:string; execution_result?:Record<string,unknown>|null; failure_reason?:string|null };
 
 function getBrowserSupabase(): SupabaseClient | null {
@@ -16,7 +16,7 @@ function getBrowserSupabase(): SupabaseClient | null {
 
 const nav = [
   ["⌂","Overview"],["✳","AI General Manager"],["◎","Leads & CRM"],["♙","Clients"],
-  ["▣","Projects"],["⌘","Product Registry"],["↗","Sales & Outreach"],["✓","Approvals"],
+  ["▣","Projects"],["☑","Tasks"],["⌘","Product Registry"],["↗","Sales & Outreach"],["✓","Approvals"],
   ["₦","Finance"],["⚙","Settings"],
 ];
 
@@ -72,7 +72,7 @@ export default function Home() {
   useEffect(()=>{
     if(!token||!orgId.trim()||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orgId.trim())){setWorkspace(null);setWorkspaceBusy(false);setWorkspaceError("");return;}
     let cancelled=false;
-    const moduleKey:Record<string,string>={"Leads & CRM":"prospects","Clients":"clients","Projects":"projects","Product Registry":"products","Approvals":"approvals","Finance":"finance","Sales & Outreach":"outreach"};
+    const moduleKey:Record<string,string>={"Leads & CRM":"prospects","Clients":"clients","Projects":"projects","Tasks":"tasks","Product Registry":"products","Approvals":"approvals","Finance":"finance","Sales & Outreach":"outreach"};
     setWorkspaceBusy(true);setWorkspaceError("");
     fetch(`/api/workspace?module=${moduleKey[active]??"overview"}`,{headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"})
       .then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error??"Company data could not be loaded.");return data;})
@@ -93,7 +93,7 @@ export default function Home() {
       .finally(()=>{if(!cancelled)setActionsBusy(false);});
     return ()=>{cancelled=true;};
   },[active,token,orgId]);
-  async function submitModuleForm(event:FormEvent<HTMLFormElement>, type:"client"|"project"|"prospect"|"contact_point"|"finance"|"approval"|"product"){
+  async function submitModuleForm(event:FormEvent<HTMLFormElement>, type:"client"|"project"|"prospect"|"contact_point"|"finance"|"approval"|"product"|"task"){
     event.preventDefault();if(!token||!orgId.trim()||saveBusy)return;
     const form=event.currentTarget;
     const fields=Object.fromEntries(new FormData(form).entries()) as Record<string,string>;
@@ -102,14 +102,14 @@ export default function Home() {
     if(type==="prospect"&&fields.fit_score)payload.fit_score=Number(fields.fit_score);
     if(type==="product")payload.capabilities=(fields.capabilities??"").split(",").map(x=>x.trim()).filter(Boolean);
     if(type==="project"&&fields.quoted_amount_ngn)payload.quoted_amount_ngn=Number(fields.quoted_amount_ngn);
-    if(type==="project"&&fields.due_at)payload.due_at=new Date(fields.due_at).toISOString();
+    if((type==="project"||type==="task")&&fields.due_at)payload.due_at=new Date(fields.due_at).toISOString();
     for(const key of ["email","website_url","dashboard_url","due_at","occurred_at","quoted_amount_ngn","fit_score","capabilities","client_id","prospect_id","product_id"])if(payload[key]==="")delete payload[key];
     setSaveBusy(true);setWorkspaceError("");
     try{
       const response=await fetch("/api/workspace",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify(payload)});
       const result=await response.json();if(!response.ok)throw new Error(result.error??"Record could not be saved.");
       form.reset();
-      const moduleKey:Record<string,string>={client:"clients",project:"projects",prospect:"prospects",contact_point:"prospects",finance:"finance",approval:"approvals",product:"products"};
+      const moduleKey:Record<string,string>={client:"clients",project:"projects",prospect:"prospects",contact_point:"prospects",finance:"finance",approval:"approvals",product:"products",task:"tasks"};
       const refreshed=await fetch(`/api/workspace?module=${moduleKey[type]}`,{headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"});
       const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Record saved, but refresh failed.");
       setWorkspace(data);
@@ -143,13 +143,13 @@ export default function Home() {
     finally{setSaveBusy(false);}
   }
 
-  async function updateRecordStatus(type:"prospect"|"project"|"client",id:string,status:string){
+  async function updateRecordStatus(type:"prospect"|"project"|"client"|"task",id:string,status:string){
     if(!token||!orgId.trim()||saveBusy)return;
     setSaveBusy(true);setWorkspaceError("");
     try{
       const response=await fetch("/api/workspace",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({type,id,status})});
       const result=await response.json();if(!response.ok)throw new Error(result.error??"Status update failed.");
-      const moduleKey={prospect:"prospects",project:"projects",client:"clients"} as const;
+      const moduleKey={prospect:"prospects",project:"projects",client:"clients",task:"tasks"} as const;
       const refreshed=await fetch(`/api/workspace?module=${moduleKey[type]}`,{headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"});
       const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Status saved, but refresh failed.");
       setWorkspace(data);
@@ -308,6 +308,10 @@ export default function Home() {
             {active==="Projects"?<>
               <form className="record-form" onSubmit={e=>void submitModuleForm(e,"project")}><h3>Create a project</h3><input name="project_name" placeholder="Project name" required/><select name="status" defaultValue="planned"><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="review">Review</option></select><input name="quoted_amount_ngn" type="number" min="0" placeholder="Quoted amount (₦)"/><select name="client_id" defaultValue=""><option value="">No linked client</option>{(workspace?.clients??[]).map(client=><option key={client.id} value={client.id}>{client.company_name}</option>)}</select><select name="prospect_id" defaultValue=""><option value="">No linked prospect</option>{(workspace?.prospects??[]).map(prospect=><option key={prospect.id} value={prospect.id}>{prospect.company_name}</option>)}</select><select name="product_id" defaultValue=""><option value="">No assigned Samzy product</option>{(workspace?.products??[]).map(product=><option key={product.id} value={product.id}>{product.product_name}</option>)}</select><input name="due_at" type="datetime-local" aria-label="Project due date"/><button className="primary" disabled={saveBusy}>Create project</button></form>
               <div className="record-list">{(workspace?.projects??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.project_name}</b><small>{item.quoted_amount_ngn?naira(Number(item.quoted_amount_ngn)):"No quote"} · {item.client_id?workspace?.clients?.find(client=>client.id===item.client_id)?.company_name??"Linked client":item.prospect_id?workspace?.prospects?.find(prospect=>prospect.id===item.prospect_id)?.company_name??"Linked prospect":"No linked client or prospect"} · {item.product_id?workspace?.products?.find(product=>product.id===item.product_id)?.product_name??"Assigned product":"No product assigned"} · {item.due_at?new Date(item.due_at).toLocaleDateString():"No due date"}</small></div><div className="status-editor"><span className="record-status">{item.status.replace("_"," ")}</span><select aria-label={`Status for ${item.project_name}`} value={statusDrafts[item.id]??item.status} onChange={e=>setStatusDrafts(old=>({...old,[item.id]:e.target.value}))}><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="review">Review</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option></select><button disabled={saveBusy||!statusDrafts[item.id]||statusDrafts[item.id]===item.status} onClick={()=>void updateRecordStatus("project",item.id,statusDrafts[item.id])}>Save status</button></div></div>)}{!workspace?.projects?.length?<p className="empty">No project records yet.</p>:null}</div>
+            </>:null}
+            {active==="Tasks"?<>
+              <form className="record-form" onSubmit={e=>void submitModuleForm(e,"task")}><h3>Create a company task</h3><input name="title" placeholder="Task title" required/><textarea name="description" placeholder="Task details / expected outcome"/><select name="priority" defaultValue="normal"><option value="low">Low priority</option><option value="normal">Normal priority</option><option value="high">High priority</option><option value="urgent">Urgent</option></select><select name="project_id" defaultValue=""><option value="">No linked project</option>{(workspace?.projects??[]).map(item=><option key={item.id} value={item.id}>{item.project_name}</option>)}</select><select name="client_id" defaultValue=""><option value="">No linked client</option>{(workspace?.clients??[]).map(item=><option key={item.id} value={item.id}>{item.company_name}</option>)}</select><select name="prospect_id" defaultValue=""><option value="">No linked prospect</option>{(workspace?.prospects??[]).map(item=><option key={item.id} value={item.id}>{item.company_name}</option>)}</select><input name="due_at" type="datetime-local" aria-label="Task due date"/><button className="primary" disabled={saveBusy}>Create task</button></form>
+              <div className="record-list">{(workspace?.tasks??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.title}</b><small>{item.description??"No task details"} · {item.priority} priority · {item.due_at?"Due "+new Date(item.due_at).toLocaleString():"No due date"} · {item.project_id?"Linked project":item.client_id?"Linked client":item.prospect_id?"Linked prospect":"No linked record"}</small></div><div className="status-editor"><span className="record-status">{item.status.replaceAll("_"," ")}</span><select aria-label={"Status for "+item.title} value={statusDrafts[item.id]??item.status} onChange={e=>setStatusDrafts(old=>({...old,[item.id]:e.target.value}))}><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select><button disabled={saveBusy||!statusDrafts[item.id]||statusDrafts[item.id]===item.status} onClick={()=>void updateRecordStatus("task",item.id,statusDrafts[item.id])}>Save status</button></div></div>)}{!workspace?.tasks?.length?<p className="empty">No tasks recorded yet.</p>:null}</div>
             </>:null}
             {active==="Product Registry"?<><form className="record-form" onSubmit={e=>void submitModuleForm(e,"product")}><h3>Register a Samzy product</h3><input name="product_name" placeholder="Product name" required/><input name="product_key" placeholder="Unique key (lowercase, hyphens)" pattern="[a-z0-9-]+" required/><input name="dashboard_url" type="url" placeholder="Dashboard URL (optional)"/><select name="integration_mode" defaultValue="manual"><option value="manual">Manual</option><option value="api">API</option><option value="webhook">Webhook</option><option value="oauth">OAuth</option></select><input name="capabilities" placeholder="Capabilities, comma-separated"/><button className="primary" disabled={saveBusy}>Register product</button></form><div className="record-list">{(workspace?.products??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.product_name}</b><small>{item.product_key} · {item.integration_mode} · {item.dashboard_url??"No dashboard URL"}</small></div><span className="record-status">{item.health_status}</span></div>)}{!workspace?.products?.length?<p className="empty">No registered products yet.</p>:null}</div></>:null}
             {active==="Sales & Outreach"?<><div className="module-note">External messaging is disabled until approved channel integrations, consent checks and communication controls are configured. This view is read-only.</div><div className="record-list">{(workspace?.outreach??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.direction} · {item.channel} · {item.recipient}</b><small>{item.body??"No message preview"} · {item.created_at?new Date(item.created_at).toLocaleString():""}</small></div><span className="record-status">{item.status}</span></div>)}{!workspace?.outreach?.length?<p className="empty">No outreach events recorded.</p>:null}</div></>:null}
