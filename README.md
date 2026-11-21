@@ -40,6 +40,7 @@ Apply these migrations, in order, only to the new dedicated Business Command Cen
 6. `supabase/migrations/20261121000600_shared_company_ai_conversation.sql`
 7. `supabase/migrations/20261121000700_ai_action_approval_engine.sql`
 8. `supabase/migrations/20261121000800_task_management.sql`
+9. `supabase/migrations/20261121000900_service_role_data_api_grants.sql`
 
 Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
 
@@ -91,3 +92,6 @@ Contact-point verification is a recorded manual attestation by an owner or admin
 - An owner or administrator must approve the request; the database transaction then rechecks role and organisation scope before executing the whitelisted operation.
 - The current safe whitelist does not include outbound delivery, payments, contracts, final pricing, deletions or other irreversible actions.
 - Migrations 007 and 008 include explicit least-privilege grants for new public tables. This is required on current Supabase projects where new tables are not automatically exposed through the Data API.
+
+
+Migration 009 explicitly grants the server-only `service_role` access to the existing public-schema tables, sequences and functions created by migrations 001–008, and establishes matching defaults for future migrations. It grants no `anon` access and does not weaken RLS for authenticated users. Keep the service-role key exclusively on the server.
