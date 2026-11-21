@@ -74,7 +74,7 @@ test("overview intelligence link opens the AI Manager", async ({ page }) => {
 
 test("module discussion action returns to the AI Manager", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Projects" }).click();
+  await page.locator("nav").getByRole("button", { name: /Projects/ }).click();
   await page.getByRole("button", { name: /Discuss this module with AI Manager/ }).click();
   await expect(page.locator(".crumb")).toContainText("AI General Manager");
 });
