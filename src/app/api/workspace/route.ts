@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { evaluateOutreach } from "@/lib/outreach/policy";
 
 export const runtime = "nodejs";
 const uuid = z.string().uuid();
@@ -37,6 +38,7 @@ const createSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("product"), product_name: z.string().trim().min(2).max(120), product_key: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/), dashboard_url: z.string().url().max(2048).optional().or(z.literal("")), integration_mode: z.enum(["manual","api","webhook","oauth"]).default("manual"), capabilities: z.array(z.string().trim().min(1).max(60)).max(30).default([]) }),
   z.object({ type: z.literal("approval"), title: z.string().trim().min(3).max(160), description: z.string().trim().min(5).max(2000), category: z.enum(["outreach","pricing","contract","payment","delivery","other"]) }),
   z.object({ type: z.literal("task"), title: z.string().trim().min(2).max(180), description: z.string().trim().max(2000).optional(), status: z.enum(["open","in_progress","blocked","completed","cancelled"]).default("open"), priority: z.enum(["low","normal","high","urgent"]).default("normal"), due_at: z.string().datetime().optional(), project_id: uuid.optional().or(z.literal("")), client_id: uuid.optional().or(z.literal("")), prospect_id: uuid.optional().or(z.literal("")) }),
+  z.object({ type: z.literal("outreach_draft"), contact_point_id: uuid, body: z.string().trim().min(10).max(4000) }),
 ]);
 
 export async function GET(request: NextRequest) {
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
       db.from("clients").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
       db.from("projects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).in("status", ["in_progress","blocked","review"]),
       db.from("approval_requests").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "pending"),
-      moduleName === "prospects" || moduleName === "overview" || moduleName === "projects" || moduleName === "tasks" ? db.from("prospects").select("id,company_name,website_url,industry,country,fit_score,status,research_summary,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
+      moduleName === "prospects" || moduleName === "overview" || moduleName === "projects" || moduleName === "tasks" || moduleName === "outreach" ? db.from("prospects").select("id,company_name,website_url,industry,country,fit_score,status,research_summary,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
       moduleName === "clients" || moduleName === "overview" || moduleName === "projects" || moduleName === "tasks" ? db.from("clients").select("id,company_name,primary_contact_name,email,phone,industry,status,source_prospect_id,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
       moduleName === "projects" || moduleName === "overview" || moduleName === "tasks" ? db.from("projects").select("id,project_name,status,quoted_amount_ngn,approved_amount_ngn,due_at,created_at,client_id,prospect_id").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
       moduleName === "products" || moduleName === "overview" || moduleName === "projects" ? db.from("product_registry").select("id,product_name,product_key,dashboard_url,integration_mode,health_status,capabilities,active").eq("organization_id", organizationId).order("product_name").limit(100) : Promise.resolve({ data: [], error: null }),
@@ -62,7 +64,7 @@ export async function GET(request: NextRequest) {
     ]);
     const errors = [prospectsCount,clientsCount,projectsCount,approvalsCount,prospects,clients,projects,products,approvals,finance,financialSummary,tasks].filter(x => x.error);
     if (errors.length) throw new Error("One or more dashboard records could not be loaded. Check whether the latest dashboard migration has been applied.");
-    const contactPoints = moduleName === "prospects" || moduleName === "overview" ? await db.from("contact_points").select("id,prospect_id,channel,address,is_verified,consent_basis,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300) : { data: [], error: null };
+    const contactPoints = moduleName === "prospects" || moduleName === "overview" || moduleName === "outreach" ? await db.from("contact_points").select("id,prospect_id,channel,address,is_verified,consent_basis,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(300) : { data: [], error: null };
     if (contactPoints.error) throw new Error("CRM contact points could not be loaded.");
     const outreach = moduleName === "outreach" ? await db.from("outreach_events").select("id,channel,recipient,direction,status,body,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : { data: [], error: null };
     if (outreach.error) throw new Error("Outreach history could not be loaded.");
@@ -105,6 +107,39 @@ export async function POST(request: NextRequest) {
         .eq("website_url", normalizedWebsite).maybeSingle();
       if (duplicateError) return error("Could not verify whether this prospect already exists.", 503);
       if (duplicate) return error(`A prospect for ${duplicate.company_name} with this website already exists.`, 409);
+    }
+    if (input.type === "outreach_draft") {
+      const { data: contact, error: contactError } = await db.from("contact_points")
+        .select("id,prospect_id,channel,address,is_verified,consent_basis")
+        .eq("id", input.contact_point_id).eq("organization_id", organizationId).maybeSingle();
+      if (contactError || !contact) return error("The selected contact does not belong to this company CRM.", 403);
+      if (!contact.is_verified || !contact.consent_basis?.trim()) return error("Outreach drafts require a verified contact point and a recorded consent basis.", 409);
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const normalizedAddress = contact.channel === "email" ? contact.address.toLowerCase() : contact.address;
+      const [suppression, recent, latest] = await Promise.all([
+        db.from("suppression_list").select("id").eq("organization_id", organizationId).eq("channel", contact.channel).eq("normalized_address", normalizedAddress).maybeSingle(),
+        db.from("outreach_events").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", contact.address).gte("created_at", since),
+        db.from("outreach_events").select("direction,created_at").eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", contact.address).order("created_at", { ascending: false }).limit(1),
+      ]);
+      if (suppression.error || recent.error || latest.error) return error("Could not verify outreach eligibility. No draft was created.", 503);
+      const latestEvent = latest.data?.[0];
+      const activeConversation = Boolean(latestEvent?.direction === "inbound" && Date.now() - new Date(latestEvent.created_at).getTime() < 30 * 24 * 60 * 60 * 1000);
+      const decision = evaluateOutreach({
+        normalizedAddress,
+        optedOut: Boolean(suppression.data),
+        lastContactAt: latestEvent?.created_at,
+        contactCount30d: recent.count ?? 0,
+        activeConversation,
+      }, contact.channel as "email" | "whatsapp" | "voice");
+      if (!decision.allowed) return error(decision.reason, 409);
+      const { data: draft, error: draftError } = await db.from("outreach_events").insert({
+        organization_id: organizationId, prospect_id: contact.prospect_id,
+        channel: contact.channel, recipient: contact.address, direction: "outbound",
+        status: "draft", body: input.body,
+      }).select("id,prospect_id,channel,recipient,direction,status,body,created_at").single();
+      if (draftError || !draft) return error("The outreach draft could not be saved.", 503);
+      await db.from("audit_events").insert({ organization_id: organizationId, actor_user_id: user.id, actor_type: "user", action: "outreach.draft.created", entity_type: "outreach_event", entity_id: draft.id, metadata: { channel: contact.channel, prospect_id: contact.prospect_id, requires_human_approval: true } });
+      return NextResponse.json({ record: draft, decision }, { status: 201, headers: noStore });
     }
     if (input.type === "contact_point") {
       const { data: linkedProspect, error: prospectLookupError } = await db.from("prospects").select("id").eq("id", input.prospect_id).eq("organization_id", organizationId).maybeSingle();
