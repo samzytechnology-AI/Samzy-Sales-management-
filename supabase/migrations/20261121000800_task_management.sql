@@ -52,3 +52,8 @@ create trigger tasks_enforce_link_organisation
   before insert or update of organization_id, project_id, client_id, prospect_id
   on public.tasks
   for each row execute function public.enforce_task_link_organisation();
+
+revoke all on function public.enforce_task_link_organisation() from public;
+revoke all on function public.enforce_task_link_organisation() from anon;
+revoke all on function public.enforce_task_link_organisation() from authenticated;
+grant execute on function public.enforce_task_link_organisation() to service_role;
