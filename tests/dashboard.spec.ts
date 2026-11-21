@@ -28,7 +28,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
   });
   await page.route("**/api/actions", async route => {
     const request = route.request();
-    if (request.method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ actions: records.aiActions }) });
+    if (request.method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ actions: records.aiActions, canReview: true }) });
     if (request.method() === "POST") {
       const input = request.postDataJSON() as Record<string, any>;
       const action = { id: "ai-action-" + (records.aiActions.length + 1), ...input, action_type: input.actionType, status: "pending_approval", created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString() };
