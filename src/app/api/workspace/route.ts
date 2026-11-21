@@ -118,19 +118,23 @@ export async function POST(request: NextRequest) {
       if (!["email","whatsapp","voice"].includes(contact.channel)) return error("Outreach supports email, WhatsApp or voice contacts only.", 422);
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const normalizedAddress = contact.channel === "email" ? contact.address.toLowerCase() : contact.address;
-      const [suppression, recent, latest] = await Promise.all([
+      const [suppression, recent, total, latestOutbound, latestInbound] = await Promise.all([
         db.from("suppression_list").select("id").eq("organization_id", organizationId).eq("channel", contact.channel).eq("normalized_address", normalizedAddress).maybeSingle(),
-        db.from("outreach_events").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", contact.address).neq("status", "draft").gte("created_at", since),
-        db.from("outreach_events").select("direction,created_at").eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", contact.address).neq("status", "draft").order("created_at", { ascending: false }).limit(1),
+        db.from("outreach_events").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", normalizedAddress).eq("direction", "outbound").in("status", ["sent","send_unknown","sending"]).gte("created_at", since),
+        db.from("outreach_events").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", normalizedAddress).eq("direction", "outbound").in("status", ["sent","send_unknown","sending"]),
+        db.from("outreach_events").select("created_at").eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", normalizedAddress).eq("direction", "outbound").in("status", ["sent","send_unknown","sending"]).order("created_at", { ascending: false }).limit(1),
+        db.from("outreach_events").select("created_at").eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", normalizedAddress).eq("direction", "inbound").order("created_at", { ascending: false }).limit(1),
       ]);
-      if (suppression.error || recent.error || latest.error) return error("Could not verify outreach eligibility. No draft was created.", 503);
-      const latestEvent = latest.data?.[0];
-      const activeConversation = Boolean(latestEvent?.direction === "inbound" && Date.now() - new Date(latestEvent.created_at).getTime() < 30 * 24 * 60 * 60 * 1000);
+      if (suppression.error || recent.error || total.error || latestOutbound.error || latestInbound.error) return error("Could not verify outreach eligibility. No draft was created.", 503);
+      const lastOutboundAt = latestOutbound.data?.[0]?.created_at;
+      const lastInboundAt = latestInbound.data?.[0]?.created_at;
+      const activeConversation = Boolean(lastInboundAt && (!lastOutboundAt || lastInboundAt > lastOutboundAt) && Date.now() - new Date(lastInboundAt).getTime() < 30 * 24 * 60 * 60 * 1000);
       const decision = evaluateOutreach({
         normalizedAddress,
         optedOut: Boolean(suppression.data),
-        lastContactAt: latestEvent?.created_at,
+        lastContactAt: lastOutboundAt,
         contactCount30d: recent.count ?? 0,
+        totalOutboundCount: total.count ?? 0,
         activeConversation,
       }, contact.channel as "email" | "whatsapp" | "voice");
       if (!decision.allowed) return error(decision.reason, 409);
