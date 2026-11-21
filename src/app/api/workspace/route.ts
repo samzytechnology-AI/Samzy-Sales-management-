@@ -92,6 +92,14 @@ export async function POST(request: NextRequest) {
     if (new TextEncoder().encode(raw).byteLength > 16_384) return error("Request is too large.", 413);
     const input = createSchema.parse(JSON.parse(raw));
     const { db, organizationId, user } = auth;
+    if (input.type === "project" && input.client_id) {
+      const { data: linkedClient, error: clientLookupError } = await db.from("clients").select("id").eq("id", input.client_id).eq("organization_id", organizationId).maybeSingle();
+      if (clientLookupError || !linkedClient) return error("The selected client does not belong to this company workspace.", 403);
+    }
+    if (input.type === "project" && input.prospect_id) {
+      const { data: linkedProspect, error: prospectLookupError } = await db.from("prospects").select("id").eq("id", input.prospect_id).eq("organization_id", organizationId).maybeSingle();
+      if (prospectLookupError || !linkedProspect) return error("The selected prospect does not belong to this company workspace.", 403);
+    }
     const table = input.type === "client" ? "clients" : input.type === "project" ? "projects" : input.type === "prospect" ? "prospects" : input.type === "finance" ? "financial_transactions" : input.type === "product" ? "product_registry" : "approval_requests";
     const payload: Record<string, unknown> = { ...input, organization_id: organizationId };
     delete payload.type;
