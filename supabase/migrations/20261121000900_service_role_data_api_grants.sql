@@ -14,5 +14,7 @@ alter default privileges for role postgres in schema public
   grant usage, select, update on sequences to service_role;
 alter default privileges for role postgres in schema public
   grant execute on functions to service_role;
-alter default privileges for role postgres in schema public
+-- Remove PostgreSQL's global PUBLIC EXECUTE default for future functions;
+-- the schema-specific service_role grant above remains in force.
+alter default privileges for role postgres
   revoke execute on functions from public;
