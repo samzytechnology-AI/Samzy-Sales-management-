@@ -282,7 +282,7 @@ export default function Home() {
       `From: ${message.from}`,`Subject: ${message.subject}`,`Received: ${message.date}`,
       `Message preview: ${message.snippet}`,
       "Identify the sender's intent, questions, sentiment, risks, facts to verify, and recommended next step. Then draft a concise reply. Clearly state if the preview is insufficient and request the full message rather than inventing details.",
-    ].join("\\n"),"reply_analysis");
+    ].join("\n"),"reply_analysis");
     setActive("AI General Manager");
   }
   function naira(value:number){return new Intl.NumberFormat("en-NG",{style:"currency",currency:"NGN",maximumFractionDigits:0}).format(value??0);}
