@@ -27,11 +27,6 @@ export async function POST(request: NextRequest) {
     return fail(cause instanceof z.ZodError ? cause.issues[0]?.message ?? "Invalid send request." : "Invalid request body.", 400);
   }
 
-  const apiKey = process.env.RESEND_API_KEY ?? "";
-  const from = process.env.OUTREACH_FROM_EMAIL ?? "";
-  const replyTo = process.env.OUTREACH_REPLY_TO_EMAIL ?? "";
-  if (!apiKey || !from) return fail("Email delivery is not configured. Add RESEND_API_KEY and OUTREACH_FROM_EMAIL on the server before sending.", 503);
-
   const db = createServerSupabaseClient();
   const { data: authData, error: authError } = await db.auth.getUser(token);
   if (authError || !authData.user) return fail("Your sign-in session is invalid or expired.", 401);
@@ -40,6 +35,11 @@ export async function POST(request: NextRequest) {
     .select("role").eq("organization_id", organizationId).eq("user_id", authData.user.id).maybeSingle();
   if (memberError) return fail("Could not verify company membership.", 503);
   if (!member || !["owner", "admin"].includes(member.role)) return fail("Only an organisation owner or administrator can send external outreach.", 403);
+  const apiKey = process.env.RESEND_API_KEY ?? "";
+  const from = process.env.OUTREACH_FROM_EMAIL ?? "";
+  const replyTo = process.env.OUTREACH_REPLY_TO_EMAIL ?? "";
+  if (!apiKey || !from) return fail("Email delivery is not configured. Add RESEND_API_KEY and OUTREACH_FROM_EMAIL on the server before sending.", 503);
+
 
   const { data: event, error: eventError } = await db.from("outreach_events")
     .select("id,prospect_id,channel,recipient,direction,status,body")
