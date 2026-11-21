@@ -81,7 +81,8 @@ export default function Home() {
     const fields=Object.fromEntries(new FormData(form).entries()) as Record<string,string>;
     const payload:Record<string,unknown>={type,...fields};
     if(type==="finance")payload.amount_ngn=Number(fields.amount_ngn);
-    if(type==="project"&&fields.quoted_amount_ngn)payload.quoted_amount_ngn=Number(fields.quoted_amount_ngn);\n    if(type==="project"&&fields.due_at)payload.due_at=new Date(fields.due_at).toISOString();
+    if(type==="project"&&fields.quoted_amount_ngn)payload.quoted_amount_ngn=Number(fields.quoted_amount_ngn);
+    if(type==="project"&&fields.due_at)payload.due_at=new Date(fields.due_at).toISOString();
     for(const key of ["email","website_url","due_at","occurred_at","quoted_amount_ngn"])if(payload[key]==="")delete payload[key];
     setSaveBusy(true);setWorkspaceError("");
     try{
