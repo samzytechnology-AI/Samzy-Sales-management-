@@ -1,4 +1,4 @@
-import type { ModelAdapter, ModelContribution, ModelRequest, ModelSlot } from "./types";
+import type { ModelAdapter, ModelContribution, ModelRequest, ModelSlot } from "./types";\nimport { CLIENT_COMMUNICATION_POLICY } from "./company-identity";
 
 export interface OpenAICompatibleConfig {
   slot: ModelSlot;
@@ -41,7 +41,7 @@ export function createOpenAICompatibleAdapter(config: OpenAICompatibleConfig): M
         body: JSON.stringify({
           model: config.model,
           messages: [
-            { role: "system", content: "You are a careful business intelligence analyst. Never fabricate facts or sources." },
+            { role: "system", content: "You are a careful business intelligence analyst. Never fabricate facts or sources. For any client-facing draft, you MUST follow this mandatory company identity and humanization policy:\\n" + CLIENT_COMMUNICATION_POLICY },
             { role: "user", content: buildPrompt(request) },
           ],
           temperature: 0.2,
