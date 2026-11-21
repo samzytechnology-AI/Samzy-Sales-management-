@@ -25,6 +25,7 @@ const starters = [
   "What should the company prioritise today?",
   "Review our sales opportunities and identify gaps.",
   "Prepare a human, personalised outreach draft. Do not send it.",
+  "Research a prospect, identify the best Samzy offer, draft the first message and forecast likely replies.",
 ];
 
 export default function Home() {
@@ -247,7 +248,7 @@ export default function Home() {
       let evidence:Array<{url:string;title?:string;excerpt?:string}> = [];
       let researchWarning = "";
       const needsResearch = ["prospect_discovery","company_research","lead_qualification","outreach_draft"].includes(task)
-        || /\b(research|look up|look at (?:this|the) company|analyse (?:this|the) business|analyze (?:this|the) business|prospect website)\b/i.test(question);
+        || /\b(research|look up|look at (?:this|the) company|analyse (?:this|the) business|analyze (?:this|the) business|prospect|find businesses|find companies|prospect website)\b/i.test(question);
       if(needsResearch){
         try{
           const countryMatch = [
