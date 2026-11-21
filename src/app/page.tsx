@@ -105,7 +105,16 @@ export default function Home() {
     }finally{setBusy(false);}
   }
 
-  async function signOut(){\n    const client=getBrowserSupabase();\n    if(client) await client.auth.signOut();\n    setToken("");setConversationId(null);setMessages([{id:Date.now(),role:"assistant",content:"You have signed out of the company workspace. Sign in again to continue."}]);setAuthText("Signed out securely.");\n  }\n\n  const providers=health?.providers??[];
+  async function signOut(){
+    const client=getBrowserSupabase();
+    if(client) await client.auth.signOut();
+    setToken("");
+    setConversationId(null);
+    setMessages([{id:Date.now(),role:"assistant",content:"You have signed out of the company workspace. Sign in again to continue."}]);
+    setAuthText("Signed out securely.");
+  }
+
+  const providers=health?.providers??[];
   const ready=health?.aiReady===true;
   const isChat=active==="AI General Manager";
 
