@@ -1,3 +1,14 @@
+export class ResendDeliveryError extends Error {
+  readonly status: number;
+  readonly ambiguous: boolean;
+  constructor(status: number) {
+    super(`Email provider returned HTTP ${status}.`);
+    this.name = "ResendDeliveryError";
+    this.status = status;
+    this.ambiguous = status >= 500 || status === 408;
+  }
+}
+
 export interface ResendEmailInput {
   apiKey: string;
   from: string;
@@ -31,7 +42,7 @@ export async function sendEmailWithResend(input: ResendEmailInput): Promise<{ me
 
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(`Email provider rejected the message with HTTP ${response.status}.`);
+    throw new ResendDeliveryError(response.status);
   }
   const messageId = payload && typeof payload === "object" && "id" in payload
     ? String((payload as { id: unknown }).id ?? "")
