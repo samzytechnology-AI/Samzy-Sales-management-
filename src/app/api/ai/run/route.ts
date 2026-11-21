@@ -230,8 +230,7 @@ export async function POST(request: NextRequest) {
         runWarnings.push("The AI prepared a structured action, but the action queue could not save it. No company record was changed. Check that migration 007 is applied and the action table is exposed to the Supabase Data API.");
         assistantContent += "\n\nThe action proposal could not be saved, so nothing was changed. An administrator must check the action-engine database setup.";
       } else {
-        proposedAction = actionRecord;
-        assistantContent += "\n\n**Action proposal submitted for approval:** " + actionRecord.summary + ". No company record has been changed. An owner or administrator must approve it in Approvals.";
+        let actionStatus = actionRecord.status;
         const { error: actionAuditError } = await supabase.from("audit_events").insert({
           organization_id: organizationId,
           actor_user_id: authData.user.id,
@@ -242,6 +241,35 @@ export async function POST(request: NextRequest) {
           metadata: { action_type: actionRecord.action_type, ai_run_id: runRecord.id },
         });
         if (actionAuditError) runWarnings.push("The action proposal was queued, but its audit event could not be saved. Administrator review is required.");
+
+        // Low-risk internal records are executed after an explicit owner/admin instruction.
+        // Managers retain the review queue. External outreach and commercial commitments
+        // are deliberately not supported by this action engine.
+        if (["owner", "admin"].includes(membership.role)) {
+          const { data: execution, error: executionError } = await supabase.rpc("review_ai_action_request", {
+            p_organization_id: organizationId,
+            p_action_request_id: actionRecord.id,
+            p_actor_user_id: authData.user.id,
+            p_decision: "approved",
+            p_decision_note: "Auto-executed: explicit owner/admin instruction for a validated low-risk internal action.",
+          });
+          if (executionError) {
+            runWarnings.push("The internal action was saved but could not be auto-executed. It remains in the approval queue.");
+          } else if (execution?.status === "executed") {
+            actionStatus = "executed";
+          } else if (execution?.status === "failed" || execution?.status === "expired") {
+            actionStatus = execution.status;
+            runWarnings.push("The internal action did not complete. Review its action record and failure details.");
+          }
+        }
+        proposedAction = { ...actionRecord, status: actionStatus };
+        if (actionStatus === "executed") {
+          assistantContent += "\n\n**Completed:** " + actionRecord.summary + ". The requested internal company record has been created or updated.";
+        } else if (actionStatus === "pending_approval") {
+          assistantContent += "\n\n**Action queued for review:** " + actionRecord.summary + ". An owner or administrator can review it in Approvals. No company record has been changed yet.";
+        } else {
+          assistantContent += "\n\n**Action status: " + actionStatus + ".** Check the action record in Approvals before retrying.";
+        }
       }
     }
 
