@@ -76,7 +76,7 @@ begin
     update public.ai_action_requests
       set status = 'expired', decided_at = now()
       where id = v_request.id;
-    raise exception 'Action request has expired';
+    return jsonb_build_object('id',v_request.id,'status','expired');
   end if;
 
   if p_decision = 'rejected' then
