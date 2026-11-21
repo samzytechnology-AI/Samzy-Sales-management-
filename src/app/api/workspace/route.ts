@@ -114,12 +114,13 @@ export async function POST(request: NextRequest) {
         .eq("id", input.contact_point_id).eq("organization_id", organizationId).maybeSingle();
       if (contactError || !contact) return error("The selected contact does not belong to this company CRM.", 403);
       if (!contact.is_verified || !contact.consent_basis?.trim()) return error("Outreach drafts require a verified contact point and a recorded consent basis.", 409);
+      if (!["email","whatsapp","voice"].includes(contact.channel)) return error("Outreach supports email, WhatsApp or voice contacts only.", 422);
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const normalizedAddress = contact.channel === "email" ? contact.address.toLowerCase() : contact.address;
       const [suppression, recent, latest] = await Promise.all([
         db.from("suppression_list").select("id").eq("organization_id", organizationId).eq("channel", contact.channel).eq("normalized_address", normalizedAddress).maybeSingle(),
-        db.from("outreach_events").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", contact.address).gte("created_at", since),
-        db.from("outreach_events").select("direction,created_at").eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", contact.address).order("created_at", { ascending: false }).limit(1),
+        db.from("outreach_events").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", contact.address).neq("status", "draft").gte("created_at", since),
+        db.from("outreach_events").select("direction,created_at").eq("organization_id", organizationId).eq("prospect_id", contact.prospect_id).eq("channel", contact.channel).eq("recipient", contact.address).neq("status", "draft").order("created_at", { ascending: false }).limit(1),
       ]);
       if (suppression.error || recent.error || latest.error) return error("Could not verify outreach eligibility. No draft was created.", 503);
       const latestEvent = latest.data?.[0];
