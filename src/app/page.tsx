@@ -32,7 +32,7 @@ export default function Home() {
   const [workspace,setWorkspace] = useState<WorkspaceData|null>(null);
   const [workspaceBusy,setWorkspaceBusy] = useState(false);
   const [workspaceError,setWorkspaceError] = useState("");
-  const [saveBusy,setSaveBusy] = useState(false);
+  const [saveBusy,setSaveBusy] = useState(false);\n  const [statusDrafts,setStatusDrafts] = useState<Record<string,string>>({});
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [orgId,setOrgId] = useState("");
@@ -102,12 +102,27 @@ export default function Home() {
     if(!token||!orgId.trim())return;
     setSaveBusy(true);setWorkspaceError("");
     try{
-      const response=await fetch("/api/workspace",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({id,decision})});
+      const response=await fetch("/api/workspace",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({type:"approval",id,decision})});
       const result=await response.json();if(!response.ok)throw new Error(result.error??"Approval decision failed.");
       const refreshed=await fetch("/api/workspace?module=approvals",{headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"});
       const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Approval updated but list refresh failed.");
       setWorkspace(data);
     }catch(err){setWorkspaceError(err instanceof Error?err.message:"Approval decision failed.");}
+    finally{setSaveBusy(false);}
+  }
+
+  async function updateRecordStatus(type:"prospect"|"project"|"client",id:string,status:string){
+    if(!token||!orgId.trim()||saveBusy)return;
+    setSaveBusy(true);setWorkspaceError("");
+    try{
+      const response=await fetch("/api/workspace",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({type,id,status})});
+      const result=await response.json();if(!response.ok)throw new Error(result.error??"Status update failed.");
+      const moduleKey={prospect:"prospects",project:"projects",client:"clients"} as const;
+      const refreshed=await fetch(`/api/workspace?module=${moduleKey[type]}`,{headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"});
+      const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Status saved, but refresh failed.");
+      setWorkspace(data);
+      setStatusDrafts(old=>{const next={...old};delete next[id];return next;});
+    }catch(err){setWorkspaceError(err instanceof Error?err.message:"Status update failed.");}
     finally{setSaveBusy(false);}
   }
 
