@@ -14,13 +14,13 @@ export async function sendEmailWithGmail(input: {
 }): Promise<{ messageId: string }> {
   const raw = [
     `To: ${input.to}`,
-    `Subject: ${input.subject.replace(/[\\r\\n]/g, " ")}`,
+    `Subject: ${input.subject.replace(/[\r\n]/g, " ")}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8",
     "Content-Transfer-Encoding: 8bit",
     "",
     input.text,
-  ].join("\\r\\n");
+  ].join("\r\n");
   let response: Response;
   try {
     response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
