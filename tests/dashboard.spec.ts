@@ -78,7 +78,7 @@ test("all primary navigation controls open their corresponding workspace views",
     await page.getByRole("button", { name: new RegExp(section) }).first().click();
     await expect(page.locator(".crumb")).toContainText(section);
     if (section !== "Overview" && section !== "AI General Manager") {
-      await expect(page.getByRole("heading", { name: section })).toBeVisible();
+      await expect(page.getByRole("heading", { name: section })).toBeVisible();\n      await expect(page.getByText("Connect your company workspace to view live records.")).toBeVisible();
     }
   }
 });
@@ -178,4 +178,32 @@ test("authenticated dashboard can submit and decide an approval request", async 
   await expect(page.getByText("Approve test outreach")).toBeVisible();
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.getByText("approved", { exact: true })).toBeVisible();
+});
+
+
+test("authenticated dashboard can add a prospect to CRM", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Leads & CRM/ }).click();
+  await page.getByPlaceholder("Company name").fill("Prospect Test Company");
+  await page.getByRole("button", { name: "Save prospect" }).click();
+  await expect.poll(() => records.prospects.length).toBe(1);
+  await expect(page.getByText("Prospect Test Company")).toBeVisible();
+});
+
+test("authenticated dashboard can create a project", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Projects/ }).click();
+  await page.getByPlaceholder("Project name").fill("Test Website Project");
+  await page.getByPlaceholder("Quoted amount (₦)").fill("200000");
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect.poll(() => records.projects.length).toBe(1);
+  await expect(page.getByText("Test Website Project")).toBeVisible();
+});
+
+test("authenticated company user can sign out", async ({ page }) => {
+  await connectMockWorkspace(page);
+  await page.route("**/auth/v1/logout*", route => route.fulfill({ status: 204, body: "" }));
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.locator(".auth-text")).toContainText("Signed out securely.");
+  await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
 });
