@@ -107,22 +107,38 @@ export async function POST(request: NextRequest) {
   }
 }
 
-const decisionSchema = z.object({ id: uuid, decision: z.enum(["approved","rejected"]), decision_note: z.string().trim().max(1000).optional() });
+const patchSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("approval"), id: uuid, decision: z.enum(["approved","rejected"]), decision_note: z.string().trim().max(1000).optional() }),
+  z.object({ type: z.literal("prospect"), id: uuid, status: z.enum(["discovered","researching","qualified","contacted","replied","opportunity","customer","disqualified"]) }),
+  z.object({ type: z.literal("project"), id: uuid, status: z.enum(["planned","in_progress","blocked","review","delivered","cancelled"]) }),
+  z.object({ type: z.literal("client"), id: uuid, status: z.enum(["active","inactive","on_hold"]) }),
+]);
 export async function PATCH(request: NextRequest) {
   try {
     const auth = await authorize(request, true);
     if ("response" in auth) return auth.response;
-    if (!["owner","admin"].includes(auth.role)) return error("Only company owners or administrators can decide approvals.", 403);
-    const input = decisionSchema.parse(await request.json());
-    const { data, error: updateError } = await auth.db.from("approval_requests").update({
-      status: input.decision, decision_note: input.decision_note ?? null,
-      decided_by: auth.user.id, decided_at: new Date().toISOString(),
-    }).eq("id", input.id).eq("organization_id", auth.organizationId).eq("status", "pending").select("id,status").maybeSingle();
-    if (updateError || !data) return error("This approval is no longer pending or could not be updated.", 409);
-    await auth.db.from("audit_events").insert({ organization_id: auth.organizationId, actor_user_id: auth.user.id, actor_type: "user", action: `approval.${input.decision}`, entity_type: "approval_request", entity_id: input.id, metadata: { decision_note: input.decision_note ?? null } });
+    const input = patchSchema.parse(await request.json());
+
+    if (input.type === "approval") {
+      if (!["owner","admin"].includes(auth.role)) return error("Only company owners or administrators can decide approvals.", 403);
+      const { data, error: updateError } = await auth.db.from("approval_requests").update({
+        status: input.decision, decision_note: input.decision_note ?? null,
+        decided_by: auth.user.id, decided_at: new Date().toISOString(),
+      }).eq("id", input.id).eq("organization_id", auth.organizationId).eq("status", "pending").select("id,status").maybeSingle();
+      if (updateError || !data) return error("This approval is no longer pending or could not be updated.", 409);
+      await auth.db.from("audit_events").insert({ organization_id: auth.organizationId, actor_user_id: auth.user.id, actor_type: "user", action: `approval.${input.decision}`, entity_type: "approval_request", entity_id: input.id, metadata: { decision_note: input.decision_note ?? null } });
+      return NextResponse.json({ record: data }, { headers: noStore });
+    }
+
+    const table = input.type === "prospect" ? "prospects" : input.type === "project" ? "projects" : "clients";
+    const { data, error: updateError } = await auth.db.from(table).update({
+      status: input.status, updated_at: new Date().toISOString(),
+    }).eq("id", input.id).eq("organization_id", auth.organizationId).select("id,status").maybeSingle();
+    if (updateError || !data) return error("The company record could not be updated.", 409);
+    await auth.db.from("audit_events").insert({ organization_id: auth.organizationId, actor_user_id: auth.user.id, actor_type: "user", action: `dashboard.${input.type}.status_updated`, entity_type: input.type, entity_id: input.id, metadata: { status: input.status } });
     return NextResponse.json({ record: data }, { headers: noStore });
   } catch (cause) {
-    if (cause instanceof z.ZodError) return error(cause.issues[0]?.message ?? "Invalid approval decision.", 422);
-    return error("The approval decision could not be saved.", 503);
+    if (cause instanceof z.ZodError) return error(cause.issues[0]?.message ?? "Invalid update details.", 422);
+    return error("The company record could not be updated.", 503);
   }
 }
