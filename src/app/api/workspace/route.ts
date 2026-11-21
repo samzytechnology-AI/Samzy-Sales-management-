@@ -61,8 +61,9 @@ export async function GET(request: NextRequest) {
     const outreach = moduleName === "outreach" ? await db.from("outreach_events").select("id,channel,recipient,direction,status,body,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : { data: [], error: null };
     if (outreach.error) throw new Error("Outreach history could not be loaded.");
     const transactions = finance.data ?? [];
-    const income = transactions.filter((x: any) => x.direction === "income" && x.status !== "void").reduce((sum: number, x: any) => sum + Number(x.amount_ngn), 0);
-    const expenses = transactions.filter((x: any) => x.direction === "expense" && x.status !== "void").reduce((sum: number, x: any) => sum + Number(x.amount_ngn), 0);
+    const totals = Array.isArray(financialSummary.data) ? financialSummary.data[0] : null;
+    const income = Number(totals?.income_ngn ?? 0);
+    const expenses = Number(totals?.expenses_ngn ?? 0);
     return NextResponse.json({
       summary: {
         prospects: prospectsCount.count ?? 0,
