@@ -37,3 +37,13 @@ test("rejects multiple action proposals instead of choosing one", () => {
   expect(result.warning).toContain("multiple action proposals");
   expect(result.cleanContent).toBe("");
 });
+
+test("discards an otherwise valid proposal when coordinated synthesis is unavailable", () => {
+  const output = "[[SAMZY_ACTION_PROPOSAL]]" +
+    JSON.stringify({ action_type: "create_prospect", summary: "Add Example Company", payload: { company_name: "Example Company" } }) +
+    "[[/SAMZY_ACTION_PROPOSAL]]";
+  const result = extractAIActionProposal(output, false);
+  expect(result.proposal).toBeUndefined();
+  expect(result.warning).toContain("synthesis was unavailable");
+  expect(result.cleanContent).toBe("");
+});
