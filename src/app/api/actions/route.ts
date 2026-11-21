@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       .eq("organization_id", auth.organizationId)
       .order("created_at", { ascending: false }).limit(100);
     if (error) throw new Error("Could not load AI action requests. Confirm the action-engine migration is applied.");
-    return NextResponse.json({ actions: data ?? [] }, { headers: noStore });
+    return NextResponse.json({ actions: data ?? [], canReview: ["owner","admin"].includes(auth.role) }, { headers: noStore });
   } catch (cause) {
     return fail(cause instanceof Error ? cause.message : "AI actions could not be loaded.", 503);
   }
