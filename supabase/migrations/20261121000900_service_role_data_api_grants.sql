@@ -18,3 +18,9 @@ alter default privileges for role postgres in schema public
 -- the schema-specific service_role grant above remains in force.
 alter default privileges for role postgres
   revoke execute on functions from public;
+
+-- The existing platform helper is an event-trigger function, not an application RPC.
+-- Keep it unavailable to browser roles; PostgreSQL event triggers still invoke it as configured.
+revoke all on function public.rls_auto_enable() from public;
+revoke all on function public.rls_auto_enable() from anon;
+revoke all on function public.rls_auto_enable() from authenticated;
