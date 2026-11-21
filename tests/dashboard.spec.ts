@@ -24,6 +24,12 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
       ] : [];
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: sharedHistory ? "77777777-7777-4777-8777-777777777777" : null, messages }) });
     }
+    const input = route.request().postDataJSON() as Record<string, any>;
+    if (String(input.objective ?? "").toLowerCase().includes("create prospect for ai proposal test")) {
+      const action = { id: "ai-proposed-from-chat", action_type: "create_prospect", summary: "Add AI Proposal Test Company", payload: { company_name: "AI Proposal Test Company" }, status: "pending_approval", created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString() };
+      records.aiActions.unshift(action);
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: "77777777-7777-4777-8777-777777777777", synthesis: "I prepared the prospect details. Action proposal submitted for approval: Add AI Proposal Test Company. No company record has been changed.", proposedAction: action, warnings: [] }) });
+    }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: "77777777-7777-4777-8777-777777777777", synthesis: "Mock AI response", warnings: [] }) });
   });
   await page.route("**/api/actions", async route => {
@@ -377,4 +383,14 @@ test("Sales workspace saves eligible outreach as a draft without sending", async
   expect(records.outreach[0].status).toBe("draft");
   expect(records.outreach[0].direction).toBe("outbound");
   await expect(page.getByText("outbound · email · hello@research.example")).toBeVisible();
+});
+
+test("AI General Manager can submit a structured prospect proposal to the approval queue", async ({ page }) => {
+  await connectMockWorkspace(page);
+  await page.getByPlaceholder(/Ask your AI General Manager anything/).fill("Create prospect for AI Proposal Test Company");
+  await page.getByRole("button", { name: /Send command/ }).click();
+  await expect(page.locator(".messages")).toContainText("Action proposal submitted for approval");
+  await page.locator("nav").getByRole("button", { name: /Approvals/ }).click();
+  await expect(page.getByText("Add AI Proposal Test Company")).toBeVisible();
+  await expect(page.getByText("pending approval", { exact: true })).toBeVisible();
 });
