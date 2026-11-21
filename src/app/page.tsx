@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; researchReady?: boolean; emailOutreachReady?: boolean; gmailOAuthReady?: boolean; whatsappOutreachReady?: boolean; outboundEnabled?: boolean };
-type GmailMessage = { id:string; threadId:string; from:string; subject:string; date:string; snippet:string };
+type GmailMessage = { id:string; threadId:string; from:string; subject:string; date:string; snippet:string; body:string };
 type ChatMessage = { role: "user" | "assistant"; content: string; id: number; actorUserId?: string | null };
 type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; canSendOutreach?:boolean; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[]; contactPoints?: any[]; tasks?: any[] };
 type AIAction = { id:string; action_type:string; summary:string; payload:Record<string,unknown>; status:string; requested_by:string; created_at:string; expires_at:string; execution_result?:Record<string,unknown>|null; failure_reason?:string|null };
@@ -280,7 +280,7 @@ export default function Home() {
     void send([
       "Analyse this incoming Gmail message and prepare a human, context-aware reply. Do not send anything.",
       `From: ${message.from}`,`Subject: ${message.subject}`,`Received: ${message.date}`,
-      `Message preview: ${message.snippet}`,
+      `Full message: ${message.body || message.snippet}`,
       "Identify the sender's intent, questions, sentiment, risks, facts to verify, and recommended next step. Then draft a concise reply. Clearly state if the preview is insufficient and request the full message rather than inventing details.",
     ].join("\n"),"reply_analysis");
     setActive("AI General Manager");
