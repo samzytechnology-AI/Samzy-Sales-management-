@@ -1,5 +1,58 @@
 import { expect, test } from "@playwright/test";
 
+
+async function connectMockWorkspace(page: import("@playwright/test").Page) {
+  const user = {
+    id: "55555555-5555-4555-8555-555555555555",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "admin@samzy.test",
+    app_metadata: { provider: "email", providers: ["email"] },
+    user_metadata: {},
+    created_at: "2026-01-01T00:00:00.000Z",
+  };
+  const accessToken = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiI1NTU1NTU1NS01NTU1LTQ1NTUtODU1NS01NTU1NTU1NTU1NTUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.signature";
+  const session = { access_token: accessToken, token_type: "bearer", expires_in: 3600, refresh_token: "mock-refresh-token", user };
+  const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [] };
+
+  await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(session) }));
+  await page.route("**/api/ai/run", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: null, messages: [] }) }));
+  await page.route("**/api/workspace**", async route => {
+    const request = route.request();
+    if (request.method() === "GET") {
+      const summary = { prospects: records.prospects.length, clients: records.clients.length, activeProjects: records.projects.length, pendingApprovals: records.approvals.filter(x => x.status === "pending").length, incomeNgn: 0, expensesNgn: 0, netNgn: 0 };
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summary, ...Object.fromEntries(Object.entries(records).map(([key, value]) => [key, value])) }) });
+      return;
+    }
+    if (request.method() === "POST") {
+      const input = request.postDataJSON() as Record<string, any>;
+      const map: Record<string, string> = { client: "clients", project: "projects", prospect: "prospects", finance: "finance", approval: "approvals", product: "products" };
+      const key = map[input.type];
+      const record = { ...input, id: `mock-${records[key].length + 1}`, status: input.type === "approval" ? "pending" : input.status ?? "active" };
+      records[key].unshift(record);
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ record }) });
+      return;
+    }
+    if (request.method() === "PATCH") {
+      const input = request.postDataJSON() as Record<string, any>;
+      const item = records.approvals.find(x => x.id === input.id);
+      if (item) item.status = input.decision;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ record: item ?? input }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Talk to AI Manager/ }).click();
+  await page.getByLabel("Company email").fill("admin@samzy.test");
+  await page.getByLabel("Password").fill("mock-password");
+  await page.getByLabel("Organisation UUID").fill("00000000-0000-4000-8000-000000000001");
+  await page.getByRole("button", { name: "Connect workspace" }).click();
+  await expect(page.locator(".auth-text")).toContainText("Secure session connected.");
+  return records;
+}
+
 test("all primary navigation controls open their corresponding workspace views", async ({ page }) => {
   await page.goto("/");
   const sections = [
@@ -55,14 +108,14 @@ test("chat composer accepts text and reports the disconnected workspace honestly
   await expect(page.locator(".messages")).toContainText("secure company workspace is not connected");
 });
 
-test("workspace sign-in form gives a truthful configuration error when Supabase is absent", async ({ page }) => {
+test("workspace sign-in reports invalid credentials from Supabase", async ({ page }) => {\n  await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "invalid_credentials", message: "Invalid login credentials" }) }));
   await page.goto("/");
   await page.getByRole("button", { name: /Talk to AI Manager/ }).click();
   await page.getByLabel("Company email").fill("admin@example.com");
   await page.getByLabel("Password").fill("not-a-real-password");
   await page.getByLabel("Organisation UUID").fill("00000000-0000-4000-8000-000000000001");
   await page.getByRole("button", { name: "Connect workspace" }).click();
-  await expect(page.locator(".auth-text")).toContainText("Supabase browser authentication is not configured");
+  await expect(page.locator(".auth-text")).toContainText("Invalid login credentials");
 });
 
 test("overview intelligence link opens the AI Manager", async ({ page }) => {
@@ -77,4 +130,44 @@ test("module discussion action returns to the AI Manager", async ({ page }) => {
   await page.locator("nav").getByRole("button", { name: /Projects/ }).click();
   await page.getByRole("button", { name: /Discuss this module with AI Manager/ }).click();
   await expect(page.locator(".crumb")).toContainText("AI General Manager");
+});
+
+test("authenticated dashboard can create a client record", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Clients/ }).click();
+  await page.getByPlaceholder("Company / client name").fill("Test Client Limited");
+  await page.getByRole("button", { name: "Save client" }).click();
+  await expect(page.getByText("Test Client Limited")).toBeVisible();
+  expect(records.clients).toHaveLength(1);
+});
+
+test("authenticated dashboard can register a product", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Product Registry/ }).click();
+  await page.getByPlaceholder("Product name").fill("Samzy Test Studio");
+  await page.getByPlaceholder("Unique key (lowercase, hyphens)").fill("samzy-test-studio");
+  await page.getByRole("button", { name: "Register product" }).click();
+  await expect(page.getByText("Samzy Test Studio")).toBeVisible();
+  expect(records.products).toHaveLength(1);
+});
+
+test("authenticated dashboard can record finance and calculate displayed totals", async ({ page }) => {
+  await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Finance/ }).click();
+  await page.getByPlaceholder("Category").fill("Web development");
+  await page.getByPlaceholder("Description").fill("Website project deposit");
+  await page.getByPlaceholder("Amount in NGN").fill("150000");
+  await page.getByRole("button", { name: "Save transaction" }).click();
+  await expect(page.getByText("Website project deposit")).toBeVisible();
+});
+
+test("authenticated dashboard can submit and decide an approval request", async ({ page }) => {
+  await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Approvals/ }).click();
+  await page.getByPlaceholder("Approval title").fill("Approve test outreach");
+  await page.getByPlaceholder("What needs approval and why?").fill("Approve the reviewed sample outreach message.");
+  await page.getByRole("button", { name: "Submit for approval" }).click();
+  await expect(page.getByText("Approve test outreach")).toBeVisible();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByText("approved", { exact: true })).toBeVisible();
 });
