@@ -20,7 +20,7 @@ A modular operating system for Samzy Technology. The command centre coordinates 
 2. Copy `.env.example` to `.env.local` and add server-side secrets.
 3. Run `npm install` and `npm run dev`.
 
-Database migrations and live AI providers still require configuration. Resend email delivery code is implemented but requires credentials and live verification. WhatsApp first-contact templates, provider credentials, database migration application and deployment remain pending.
+Database migrations and live AI providers still require configuration. Resend email delivery is implemented through the guarded owner/admin send endpoint. WhatsApp Cloud API approved-template delivery is implemented through a separate guarded owner/admin endpoint; both require provider credentials, verified sender setup and live verification. WhatsApp inbound webhook/reply synchronisation remains pending. Database migration application and deployment remain pending.
 
 ## Live prospect research
 - Authenticated company users can request live web research through the server-side Brave Search adapter.
@@ -102,3 +102,12 @@ Contact-point verification is a recorded manual attestation by an owner or admin
 
 
 Migration 009 explicitly grants the server-only `service_role` access to the existing public-schema tables, sequences and functions created by migrations 001–008, and establishes matching defaults for future migrations. It grants no `anon` access and does not weaken RLS for authenticated users. Keep the service-role key exclusively on the server.
+
+
+## Email and WhatsApp delivery
+- Email: owner/admin can send an eligible saved email draft through Resend at `POST /api/outreach/send`. Configure `RESEND_API_KEY`, `OUTREACH_FROM_EMAIL` (verified sender domain) and optionally `OUTREACH_REPLY_TO_EMAIL`.
+- WhatsApp: owner/admin can send an eligible saved WhatsApp draft through Meta WhatsApp Cloud API at `POST /api/outreach/whatsapp/send`. Configure `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_NAME`, and `WHATSAPP_TEMPLATE_LANGUAGE`.
+- The approved Meta message template must contain exactly one body variable (`{{1}}`); the saved personalised message is supplied as that parameter. This endpoint sends template messages only, suitable for business-initiated conversations outside the 24-hour customer-service window. Meta template approval and policy eligibility are still enforced by Meta.
+- Both channels require owner/admin authorization, a CRM contact manually verified by an owner/admin, a recorded consent/source basis, suppression checks, contact frequency limits, an active-conversation check, an atomic draft claim and provider message ID recording. Ambiguous provider outcomes are marked `send_unknown`; never blindly resend them.
+- No bulk blast or autonomous send is enabled. Each draft requires a deliberate send action. Inbound WhatsApp webhook verification, inbound message ingestion, automated reply drafting from webhook events and two-way conversation synchronisation are not yet implemented.
+- Configure `WHATSAPP_GRAPH_API_VERSION` to a Graph API version supported by your Meta app.
