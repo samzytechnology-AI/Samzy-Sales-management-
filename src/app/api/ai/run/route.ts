@@ -183,3 +183,60 @@ export async function POST(request: NextRequest) {
     return jsonError(safeMessage, 503);
   }
 }
+
+
+/** Restore the signed-in user's most recent company conversation. */
+export async function GET(request: NextRequest) {
+  const authorization = request.headers.get("authorization") ?? "";
+  const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  const organizationId = request.headers.get("x-organization-id") ?? "";
+  if (!token) return jsonError("A valid sign-in session is required.", 401);
+  if (!uuidSchema.safeParse(organizationId).success) return jsonError("A valid organization ID is required.", 400);
+
+  try {
+    const supabase = createServerSupabaseClient();
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authData.user) return jsonError("Your sign-in session is invalid or expired.", 401);
+
+    const { data: membership, error: membershipError } = await supabase
+      .from("organization_members")
+      .select("role")
+      .eq("organization_id", organizationId)
+      .eq("user_id", authData.user.id)
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify organization membership.");
+    if (!membership || !["owner", "admin", "manager"].includes(membership.role)) {
+      return jsonError("You do not have permission to access this company workspace.", 403);
+    }
+
+    const { data: conversation, error: conversationError } = await supabase
+      .from("ai_conversations")
+      .select("id,title,updated_at")
+      .eq("organization_id", organizationId)
+      .eq("created_by", authData.user.id)
+      .eq("status", "active")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (conversationError) throw new Error("Could not load your company conversation.");
+
+    if (!conversation) return NextResponse.json({ conversationId: null, messages: [] }, { headers: { "Cache-Control": "no-store" } });
+
+    const { data: messages, error: messagesError } = await supabase
+      .from("ai_messages")
+      .select("id,role,content,created_at")
+      .eq("organization_id", organizationId)
+      .eq("conversation_id", conversation.id)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    if (messagesError) throw new Error("Could not restore conversation messages.");
+
+    return NextResponse.json({
+      conversationId: conversation.id,
+      title: conversation.title,
+      messages: messages ?? [],
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return jsonError("Company conversation history could not be loaded. Check server configuration.", 503);
+  }
+}
