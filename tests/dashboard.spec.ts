@@ -13,7 +13,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page) {
   };
   const accessToken = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiI1NTU1NTU1NS01NTU1LTQ1NTUtODU1NS01NTU1NTU1NTU1NTUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.signature";
   const session = { access_token: accessToken, token_type: "bearer", expires_in: 3600, refresh_token: "mock-refresh-token", user };
-  const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [] };
+  const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [], contactPoints: [] };
 
   await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(session) }));
   await page.route("**/api/ai/run", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: null, messages: [] }) }));
@@ -26,7 +26,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page) {
     }
     if (request.method() === "POST") {
       const input = request.postDataJSON() as Record<string, any>;
-      const map: Record<string, string> = { client: "clients", project: "projects", prospect: "prospects", finance: "finance", approval: "approvals", product: "products" };
+      const map: Record<string, string> = { client: "clients", project: "projects", prospect: "prospects", contact_point: "contactPoints", finance: "finance", approval: "approvals", product: "products" };
       const key = map[input.type];
       if (!key) {
         await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Unknown mock record type" }) });
@@ -262,4 +262,19 @@ test("overview displays live workspace totals instead of placeholder dashes", as
   await page.locator("nav").getByRole("button", { name: /Overview/ }).click();
   await expect(page.locator(".metrics")).toContainText("1");
   await expect(page.locator(".metrics")).not.toContainText("CRM integration pending");
+});
+
+test("CRM stores prospect contact points as unverified until verification occurs", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  await page.locator("nav").getByRole("button", { name: /Leads & CRM/ }).click();
+  await page.getByPlaceholder("Company name").fill("Contact Capture Company");
+  await page.getByRole("button", { name: "Save prospect" }).click();
+  await expect.poll(() => records.prospects.length).toBe(1);
+  const row = page.locator(".record-row").filter({ hasText: "Contact Capture Company" });
+  await row.getByPlaceholder("Email address or phone number").fill("SALES@EXAMPLE.COM");
+  await row.getByPlaceholder("Contact source / consent basis (optional)").fill("Published company contact page");
+  await row.getByRole("button", { name: "Add contact" }).click();
+  await expect.poll(() => records.contactPoints.length).toBe(1);
+  expect(records.contactPoints[0].address).toBe("SALES@EXAMPLE.COM");
+  await expect(row.locator(".contact-points")).toContainText("Unverified");
 });
