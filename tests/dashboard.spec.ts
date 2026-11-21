@@ -16,6 +16,8 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
   const records: Record<string, any[]> = { prospects: [], clients: [], projects: [], products: [], approvals: [], finance: [], outreach: [], contactPoints: [], aiActions: [], tasks: [] };
 
   await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(session) }));
+  await page.route("**/api/auth/login", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ session: { access_token: accessToken, refresh_token: "mock-refresh-token" }, user }) }));
+  await page.route("**/auth/v1/user", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(user) }));
   await page.route("**/api/ai/run", route => {
     if (route.request().method() === "GET") {
       const messages = sharedHistory ? [
@@ -114,7 +116,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
 
   await page.goto("/");
   await page.getByRole("button", { name: /Talk to AI Manager/ }).click();
-  await page.getByLabel("Company email").fill("admin@samzy.test");
+  await page.getByLabel("Company username").fill("SAMZYTECHNOLOGY");
   await page.getByLabel("Password").fill("mock-password");
   await page.getByLabel("Organisation UUID").fill("00000000-0000-4000-8000-000000000001");
   await page.getByRole("button", { name: "Connect workspace" }).click();
@@ -182,7 +184,7 @@ test("workspace sign-in reports invalid credentials from Supabase", async ({ pag
   await page.route("**/auth/v1/token?grant_type=password", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "invalid_credentials", message: "Invalid login credentials" }) }));
   await page.goto("/");
   await page.getByRole("button", { name: /Talk to AI Manager/ }).click();
-  await page.getByLabel("Company email").fill("admin@example.com");
+  await page.getByLabel("Company username").fill("admin@example.com");
   await page.getByLabel("Password").fill("not-a-real-password");
   await page.getByLabel("Organisation UUID").fill("00000000-0000-4000-8000-000000000001");
   await page.getByRole("button", { name: "Connect workspace" }).click();
