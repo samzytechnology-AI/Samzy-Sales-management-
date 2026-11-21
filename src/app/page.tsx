@@ -25,7 +25,7 @@ const starters = [
   "What should the company prioritise today?",
   "Review our sales opportunities and identify gaps.",
   "Prepare a human, personalised outreach draft. Do not send it.",
-  "Research a prospect, identify the best Samzy offer, draft the first message and forecast likely replies.",
+  "Find Nigerian businesses that may need Samzy's website, app or automation services, then rank the strongest prospects.",
 ];
 
 export default function Home() {
