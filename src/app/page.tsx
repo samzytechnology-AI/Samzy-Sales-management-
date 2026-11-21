@@ -52,7 +52,7 @@ export default function Home() {
     let cancelled=false;
     fetch("/api/ai/run",{method:"GET",headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"})
       .then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error??"Could not restore chat history.");return data;})
-      .then(data=>{if(cancelled)return;setConversationId(data.conversationId??null);if(Array.isArray(data.messages)&&data.messages.length){setMessages(data.messages.map((m:{id:string;role:"user"|"assistant";content:string})=>({id:m.id,role:m.role==="user"?"user":"assistant",content:m.content})));}})
+      .then(data=>{if(cancelled)return;setConversationId(data.conversationId??null);if(Array.isArray(data.messages)&&data.messages.length){setMessages(data.messages.map((m:{id:string;role:"user"|"assistant";content:string},index:number)=>({id:Date.now()+index,role:m.role==="user"?"user":"assistant",content:m.content})));}})
       .catch(()=>{if(!cancelled)setAuthText("Workspace connected, but previous chat history could not be restored.");});
     return ()=>{cancelled=true;};
   },[token,orgId]);
