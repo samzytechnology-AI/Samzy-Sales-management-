@@ -51,11 +51,19 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
     }
     return route.continue();
   });
+  await page.route("**/api/outreach/send", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    const input = route.request().postDataJSON() as Record<string, any>;
+    const event = records.outreach.find(item => item.id === input.outreachId);
+    if (!event || event.status !== "draft") return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: "Draft unavailable" }) });
+    event.status = "sent";
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "sent", messageId: "mock-resend-id" }) });
+  });
   await page.route("**/api/workspace**", async route => {
     const request = route.request();
     if (request.method() === "GET") {
       const summary = { prospects: records.prospects.length, clients: records.clients.length, activeProjects: records.projects.length, pendingApprovals: records.approvals.filter(x => x.status === "pending").length, incomeNgn: 0, expensesNgn: 0, netNgn: 0 };
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summary, ...Object.fromEntries(Object.entries(records).map(([key, value]) => [key, value])) }) });
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ summary, canSendOutreach: true, ...Object.fromEntries(Object.entries(records).map(([key, value]) => [key, value])) }) });
       return;
     }
     if (request.method() === "POST") {
@@ -383,6 +391,20 @@ test("Sales workspace saves eligible outreach as a draft without sending", async
   expect(records.outreach[0].status).toBe("draft");
   expect(records.outreach[0].direction).toBe("outbound");
   await expect(page.getByText("outbound · email · hello@research.example")).toBeVisible();
+});
+
+test("Sales workspace can send an eligible email draft after an owner action", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  records.prospects.push({ id: "send-prospect-1", company_name: "Send Test Company", status: "qualified" });
+  records.contactPoints.push({ id: "send-contact-1", prospect_id: "send-prospect-1", channel: "email", address: "hello@send-test.example", is_verified: true, consent_basis: "Public company contact page" });
+  await page.locator("nav").getByRole("button", { name: /Sales & Outreach/ }).click();
+  await page.locator('select[name="contact_point_id"]').selectOption("send-contact-1");
+  await page.getByPlaceholder(/Write a specific, personalised message/).fill("I noticed your company is expanding its services and have one practical idea to improve enquiry capture.");
+  await page.getByRole("button", { name: "Save outreach draft" }).click();
+  await expect.poll(() => records.outreach.length).toBe(1);
+  await page.getByRole("button", { name: "Send email now" }).click();
+  await expect.poll(() => records.outreach[0].status).toBe("sent");
+  await expect(page.locator(".record-status").filter({ hasText: "sent" })).toBeVisible();
 });
 
 test("AI General Manager executes an explicitly requested low-risk prospect action for an owner", async ({ page }) => {
