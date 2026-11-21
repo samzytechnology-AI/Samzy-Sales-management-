@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID ?? "";
     const templateName = process.env.WHATSAPP_TEMPLATE_NAME ?? "";
     const language = process.env.WHATSAPP_TEMPLATE_LANGUAGE ?? "en";
+    const graphApiVersion = process.env.WHATSAPP_GRAPH_API_VERSION ?? "v22.0";
     if (!accessToken || !phoneNumberId || !templateName) return fail("WhatsApp is not configured. Add WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID and an approved WHATSAPP_TEMPLATE_NAME.", 503);
 
     const { data: event, error: eventError } = await db.from("outreach_events")
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     if(claimError)return fail("Could not reserve this draft for sending.",503);
     if(!claimed)return fail("This draft is already being sent or processed.",409);
     try {
-      const sent=await sendWhatsAppTemplate({accessToken,phoneNumberId,to:phone,templateName,language,bodyText:event.body,idempotencyKey:event.id});
+      const sent=await sendWhatsAppTemplate({accessToken,phoneNumberId,to:phone,templateName,language,bodyText:event.body,idempotencyKey:event.id,graphApiVersion});
       const {error:updateError}=await db.from("outreach_events").update({status:"sent",provider_message_id:sent.messageId,sent_at:new Date().toISOString()})
         .eq("id",event.id).eq("organization_id",organizationId).eq("status","sending");
       if(updateError){
