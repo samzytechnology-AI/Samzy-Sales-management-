@@ -91,13 +91,14 @@ export async function POST(request: NextRequest) {
       supabase.from("outreach_events").select("id,prospect_id,channel,recipient,direction,status,body,sent_at,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(12),
       supabase.rpc("get_financial_summary", { p_organization_id: organizationId }),
       supabase.from("ai_runs").select("id,objective,task_type,status,created_at,synthesis").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(5),
-      supabase.from("audit_events").select("action,entity_type,entity_id,metadata,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(20),
+      supabase.from("audit_events").select("action,entity_type,entity_id,metadata,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(12),
     ]);
     const snapshotResults = [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult];
     if (snapshotResults.some(result => result.error)) {
       throw new Error("Could not load the complete company operating snapshot. Check the latest database migrations and workspace permissions.");
     }
     const financialTotals = Array.isArray(financeResult.data) ? financeResult.data[0] : null;
+    const boundedApprovedMemory = (memory ?? []).map(item => ({ ...item, content: item.content.slice(0, 1200) }));
     const companySnapshot = {
       capturedAt: new Date().toISOString(),
       dataScope: "Verified records read from this organisation's Business Command Centre database. Empty arrays mean no records were found; they do not imply activity outside this system.",
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
       context: {
         ...body.context,
         conversationHistory: (history ?? []).reverse(),
-        approvedCompanyMemory: memory ?? [],
+        approvedCompanyMemory: boundedApprovedMemory,
         verifiedCompanySnapshot: companySnapshot,
       },
     });
