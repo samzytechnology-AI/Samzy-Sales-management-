@@ -26,7 +26,7 @@ function buildPrompt(request: ModelRequest): string {
 }
 
 export function createOpenAICompatibleAdapter(config: OpenAICompatibleConfig): ModelAdapter {
-  const baseUrl = config.baseUrl.replace(/\\/+$/, "");
+  const baseUrl = config.baseUrl.replace(/\/+$/, "");
   return {
     slot: config.slot,
     provider: config.provider,
