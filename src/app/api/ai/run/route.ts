@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     if (memoryError) throw new Error("Could not load approved company memory.");
 
     // Give the AI General Manager a fresh, read-only snapshot of the real company workspace.
-    const [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult, contactCoverageResult, prospectTotal, clientTotal, projectTotal, approvalTotal, outreachTotal] = await Promise.all([
+    const [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult, contactCoverageTotal, verifiedContactTotal, prospectTotal, clientTotal, projectTotal, approvalTotal, outreachTotal] = await Promise.all([
       supabase.from("prospects").select("id,company_name,website_url,industry,country,fit_score,status,research_summary,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
       supabase.from("clients").select("id,company_name,industry,status,source_prospect_id,created_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
       supabase.from("projects").select("id,project_name,status,quoted_amount_ngn,approved_amount_ngn,due_at,client_id,prospect_id,product_id,updated_at").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(12),
@@ -92,14 +92,15 @@ export async function POST(request: NextRequest) {
       supabase.rpc("get_financial_summary", { p_organization_id: organizationId }),
       supabase.from("ai_runs").select("id,objective,task_type,status,created_at,synthesis").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(5),
       supabase.from("audit_events").select("action,entity_type,entity_id,metadata,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(10),
-      supabase.from("contact_points").select("channel,is_verified").eq("organization_id", organizationId).limit(300),
+      supabase.from("contact_points").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
+      supabase.from("contact_points").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("is_verified", true),
       supabase.from("prospects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
             supabase.from("clients").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
             supabase.from("projects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
             supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
             supabase.from("outreach_events").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
     ]);
-    const snapshotResults = [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult, contactCoverageResult, prospectTotal, clientTotal, projectTotal, approvalTotal, outreachTotal];
+    const snapshotResults = [prospectsResult, clientsResult, projectsResult, approvalsResult, outreachResult, financeResult, runsResult, auditResult, contactCoverageTotal, verifiedContactTotal, prospectTotal, clientTotal, projectTotal, approvalTotal, outreachTotal];
     if (snapshotResults.some(result => result.error)) {
       throw new Error("Could not load the complete company operating snapshot. Check the latest database migrations and workspace permissions.");
     }
@@ -131,11 +132,10 @@ export async function POST(request: NextRequest) {
       recentAiRuns: (runsResult.data ?? []).map(item => ({ ...item, synthesis: item.synthesis?.slice(0, 500) ?? null })),
       recentAuditEvents: (auditResult.data ?? []).map(item => ({ ...item, metadata: item.metadata ? JSON.stringify(item.metadata).slice(0, 250) : null })),
       contactCoverage: {
-        loadedContactPoints: contactCoverageResult.data?.length ?? 0,
-        verified: contactCoverageResult.data?.filter(item => item.is_verified).length ?? 0,
-        unverified: contactCoverageResult.data?.filter(item => !item.is_verified).length ?? 0,
-        byChannel: Object.fromEntries(["email","whatsapp","voice","other"].map(channel => [channel, contactCoverageResult.data?.filter(item => item.channel === channel).length ?? 0])),
-        note: "Contact addresses are intentionally excluded from the shared AI context. Only channel and verification counts are supplied.",
+        total: contactCoverageTotal.count ?? 0,
+        verified: verifiedContactTotal.count ?? 0,
+        unverified: Math.max(0, (contactCoverageTotal.count ?? 0) - (verifiedContactTotal.count ?? 0)),
+        note: "Contact addresses are intentionally excluded from the shared AI context. Only exact verification counts are supplied.",
       },
     };
 
