@@ -27,7 +27,7 @@ create index if not exists ai_action_requests_org_status_idx
 alter table public.ai_action_requests enable row level security;
 create policy "members read own organisation action requests"
   on public.ai_action_requests for select
-  using (public.is_org_member(organization_id));
+  using (public.can_access_company_ai(organization_id));
 
 create or replace function public.review_ai_action_request(
   p_organization_id uuid,
