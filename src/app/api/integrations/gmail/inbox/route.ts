@@ -27,13 +27,13 @@ export async function GET(request: NextRequest) {
     if (!listResponse.ok) throw new Error("Gmail inbox listing failed.");
     const list = await listResponse.json() as { messages?: Array<{ id: string; threadId: string }> };
     const messages = await Promise.all((list.messages ?? []).map(async (item) => {
-      const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(item.id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, {
+      const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(item.id)}?format=full`, {
         headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store",
       });
       if (!response.ok) return null;
       const message = await response.json() as {
         id: string; threadId: string; snippet?: string;
-        payload?: { headers?: Array<{ name: string; value: string }> };
+        payload?: { headers?: Array<{ name: string; value: string }>; mimeType?: string; body?: { data?: string }; parts?: GmailPart[] };
       };
       const headers = message.payload?.headers ?? [];
       const header = (name: string) => headers.find((entry) => entry.name.toLowerCase() === name.toLowerCase())?.value ?? "";
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         from: header("From").slice(0, 300),
         subject: header("Subject").slice(0, 300),
         date: header("Date").slice(0, 100),
-        snippet: (message.snippet ?? "").slice(0, 1_000),
+        snippet: (message.snippet ?? "").slice(0, 1_000),\n        body: extractBody(message.payload),
       };
     }));
     return NextResponse.json({
