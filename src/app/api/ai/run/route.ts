@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { runBusinessAI } from "@/lib/ai/run-business-ai";
+import { extractAIActionProposal } from "@/lib/ai/action-proposals";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -193,26 +194,69 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const proposalExtraction = extractAIActionProposal(result.synthesis);
+    const runWarnings = [...result.warnings];
+    if (proposalExtraction.warning) runWarnings.push(proposalExtraction.warning);
+    const cleanSynthesis = proposalExtraction.cleanContent || "The AI did not return a user-facing synthesis.";
+
     const { data: runRecord, error: runError } = await supabase.from("ai_runs").insert({
       organization_id: organizationId,
       actor_user_id: authData.user.id,
       objective: body.objective,
       task_type: body.task,
       model_contributions: result.contributions.map(({ slot, provider, model, content }) => ({ slot, provider, model, content })),
-      synthesis: result.synthesis,
-      warnings: result.warnings,
+      synthesis: cleanSynthesis,
+      warnings: runWarnings,
       request_metadata: { conversation_id: conversationId },
       status: "completed",
     }).select("id").single();
     if (runError || !runRecord) throw new Error("AI completed, but its execution record could not be saved. Contact an administrator before retrying.");
 
+    let proposedAction: { id: string; action_type: string; summary: string; status: string } | null = null;
+    let assistantContent = cleanSynthesis;
+    if (proposalExtraction.proposal) {
+      const proposal = proposalExtraction.proposal;
+      const { data: actionRecord, error: actionError } = await supabase.from("ai_action_requests").insert({
+        organization_id: organizationId,
+        requested_by: authData.user.id,
+        ai_run_id: runRecord.id,
+        action_type: proposal.action_type,
+        summary: proposal.summary,
+        payload: proposal.payload,
+        idempotency_key: crypto.randomUUID(),
+      }).select("id,action_type,summary,status").single();
+      if (actionError || !actionRecord) {
+        runWarnings.push("The AI prepared a structured action, but the action queue could not save it. No company record was changed. Check that migration 007 is applied and the action table is exposed to the Supabase Data API.");
+        assistantContent += "\n\nThe action proposal could not be saved, so nothing was changed. An administrator must check the action-engine database setup.";
+      } else {
+        proposedAction = actionRecord;
+        assistantContent += "\n\n**Action proposal submitted for approval:** " + actionRecord.summary + ". No company record has been changed. An owner or administrator must approve it in Approvals.";
+        const { error: actionAuditError } = await supabase.from("audit_events").insert({
+          organization_id: organizationId,
+          actor_user_id: authData.user.id,
+          actor_type: "user",
+          action: "ai_action.proposed",
+          entity_type: "ai_action_request",
+          entity_id: actionRecord.id,
+          metadata: { action_type: actionRecord.action_type, ai_run_id: runRecord.id },
+        });
+        if (actionAuditError) runWarnings.push("The action proposal was queued, but its audit event could not be saved. Administrator review is required.");
+      }
+    }
+
+    await supabase.from("ai_runs").update({
+      synthesis: assistantContent,
+      warnings: runWarnings,
+      request_metadata: { conversation_id: conversationId, proposed_action_id: proposedAction?.id ?? null },
+    }).eq("id", runRecord.id).eq("organization_id", organizationId);
+
     const { error: assistantMessageError } = await supabase.from("ai_messages").insert({
       organization_id: organizationId,
       conversation_id: conversationId,
       role: "assistant",
-      content: result.synthesis,
+      content: assistantContent,
       ai_run_id: runRecord.id,
-      metadata: { warnings: result.warnings },
+      metadata: { warnings: runWarnings, proposed_action_id: proposedAction?.id ?? null },
     });
     if (assistantMessageError) throw new Error("The AI result was generated, but could not be saved to conversation history.");
 
@@ -229,7 +273,7 @@ export async function POST(request: NextRequest) {
     });
     if (auditError) throw new Error("The AI result was saved, but the audit record could not be completed.");
 
-    return NextResponse.json({ ...result, conversationId, runId: runRecord.id }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ...result, synthesis: assistantContent, warnings: runWarnings, proposedAction, conversationId, runId: runRecord.id }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI execution failed.";
     const safeMessage = message.includes("provider configuration missing")
