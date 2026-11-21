@@ -201,12 +201,24 @@ const patchSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("project"), id: uuid, status: z.enum(["planned","in_progress","blocked","review","delivered","cancelled"]) }),
   z.object({ type: z.literal("client"), id: uuid, status: z.enum(["active","inactive","on_hold"]) }),
   z.object({ type: z.literal("task"), id: uuid, status: z.enum(["open","in_progress","blocked","completed","cancelled"]) }),
+  z.object({ type: z.literal("contact_point_verify"), id: uuid, verification_note: z.string().trim().min(5).max(300) }),
 ]);
 export async function PATCH(request: NextRequest) {
   try {
     const auth = await authorize(request, true);
     if ("response" in auth) return auth.response;
     const input = patchSchema.parse(await request.json());
+
+    if (input.type === "contact_point_verify") {
+      if (!["owner","admin"].includes(auth.role)) return error("Only an owner or administrator can verify a CRM contact point.", 403);
+      const { data, error: verificationError } = await auth.db.from("contact_points").update({ is_verified: true })
+        .eq("id", input.id).eq("organization_id", auth.organizationId).eq("is_verified", false)
+        .not("consent_basis", "is", null).neq("consent_basis", "")
+        .select("id,prospect_id,is_verified").maybeSingle();
+      if (verificationError || !data) return error("Contact verification requires an unverified contact with a recorded consent basis.", 409);
+      await auth.db.from("audit_events").insert({ organization_id: auth.organizationId, actor_user_id: auth.user.id, actor_type: "user", action: "crm.contact_point.verified", entity_type: "contact_point", entity_id: input.id, metadata: { verification_note: input.verification_note, verification_mode: "manual_attestation" } });
+      return NextResponse.json({ record: data, verification_mode: "manual_attestation" }, { headers: noStore });
+    }
 
     if (input.type === "convert_prospect") {
       const { data: converted, error: conversionError } = await auth.db.rpc("convert_prospect_to_client", {
