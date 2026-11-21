@@ -396,7 +396,7 @@ test("Sales workspace saves eligible outreach as a draft without sending", async
 test("CRM prospect can launch a source-grounded sales plan in the AI Manager", async ({ page }) => {
   const records = await connectMockWorkspace(page);
   records.prospects.push({ id: "research-prospect-1", company_name: "Research Test Company", status: "qualified", industry: "Education" });
-  let aiRequest: Record<string, any> | null = null;
+  let aiRequest: Record<string, any> = {};
   await page.route("**/api/research/web", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ evidence: [{ url: "https://research-test.example", title: "Research Test Company", excerpt: "Official business information." }] }) }));
   await page.route("**/api/ai/run", async route => {
     aiRequest = route.request().postDataJSON() as Record<string, any>;
