@@ -38,6 +38,7 @@ Apply these migrations, in order, only to the new dedicated Business Command Cen
 4. `supabase/migrations/20261121000400_finance_summary_rpc.sql`
 5. `supabase/migrations/20261121000500_crm_prospect_conversion.sql`
 6. `supabase/migrations/20261121000600_shared_company_ai_conversation.sql`
+7. `supabase/migrations/20261121000700_ai_action_approval_engine.sql`
 
 Do not apply these migrations to Samzy School Cloud. The current repository is prepared for later Supabase connection; migrations have not been applied to a live database.
 
@@ -54,3 +55,13 @@ Vercel deployment and production environment configuration are intentionally def
 - Run dashboard browser tests with `npm run test:e2e`.
 - The current 19-test browser suite covers primary navigation and workspace gating, AI Manager controls, secure sign-in/sign-out, mocked authenticated workspace access, and create, status-update and approval workflows for prospects, clients, projects, products, finance and approval requests, including project-to-CRM and product assignment, prospect-to-client conversion, live overview metrics contact-point capture safeguards and shared AI conversation history attribution.
 - Authenticated browser tests use a mocked Supabase sign-in and mocked workspace API. They verify front-end request/response behavior, not live database persistence, real provider API calls, external message delivery or production deployment.
+
+
+## Controlled AI action engine
+- The AI action API accepts only a fixed whitelist of structured actions: create prospect, update prospect status, create project, update project status, and create an approval request.
+- Proposals are stored separately from operational records with organisation scope, requester, idempotency key, 24-hour expiry, status and execution outcome.
+- Proposing an action never mutates CRM or project data. Only an owner or administrator can approve or reject a pending proposal.
+- Approval calls a database transaction that rechecks the approver's organisation role, locks the pending request, validates organisation ownership of linked records, performs the whitelisted operation, and writes an audit event. External messaging, payments, contracts, final pricing and deletions are not executable actions.
+- The Approvals screen includes an AI-assisted prospect proposal form and a queue for reviewing and executing action requests.
+- The automated browser suite includes the proposal → pending approval → approve/execute lifecycle. Browser tests mock the API; they do not prove live PostgreSQL transaction behaviour.
+- Apply migration 007 after migrations 001–006. It has not been applied to a live database.
