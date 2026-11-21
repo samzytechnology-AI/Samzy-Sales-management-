@@ -52,7 +52,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page, share
     }
     if (request.method() === "POST") {
       const input = request.postDataJSON() as Record<string, any>;
-      const map: Record<string, string> = { client: "clients", project: "projects", prospect: "prospects", contact_point: "contactPoints", finance: "finance", approval: "approvals", product: "products", task: "tasks" };
+      const map: Record<string, string> = { client: "clients", project: "projects", prospect: "prospects", contact_point: "contactPoints", finance: "finance", approval: "approvals", product: "products", task: "tasks", outreach_draft: "outreach" };
       const key = map[input.type];
       if (!key) {
         await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Unknown mock record type" }) });
@@ -352,4 +352,18 @@ test("authenticated workspace can create and update linked company tasks", async
   await row.getByLabel("Status for Prepare school onboarding checklist").selectOption("completed");
   await row.getByRole("button", { name: "Save status" }).click();
   await expect.poll(() => records.tasks[0].status).toBe("completed");
+});
+
+test("Sales workspace saves eligible outreach as a draft without sending", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  records.prospects.push({ id: "outreach-prospect-1", company_name: "Research Prospect", status: "qualified" });
+  records.contactPoints.push({ id: "contact-verified-1", prospect_id: "outreach-prospect-1", channel: "email", address: "hello@research.example", is_verified: true, consent_basis: "Verified published business contact with documented consent" });
+  await page.locator("nav").getByRole("button", { name: /Sales & Outreach/ }).click();
+  await page.locator('select[name="contact_point_id"]').selectOption("contact-verified-1");
+  await page.getByPlaceholder("Write a specific, personalised message for this prospect…").fill("Hello, I reviewed your business website and would like to discuss a possible website improvement project.");
+  await page.getByRole("button", { name: "Save outreach draft — do not send" }).click();
+  await expect.poll(() => records.outreach.length).toBe(1);
+  expect(records.outreach[0].status).toBe("draft");
+  expect(records.outreach[0].direction).toBe("outbound");
+  await expect(page.getByText("outbound · email · hello@research.example")).toBeVisible();
 });
