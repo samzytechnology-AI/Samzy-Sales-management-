@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; outboundEnabled?: boolean };
-type ChatMessage = { role: "user" | "assistant"; content: string; id: number };
+type ChatMessage = { role: "user" | "assistant"; content: string; id: number; actorUserId?: string | null };
 type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[]; contactPoints?: any[] };
 
 function getBrowserSupabase(): SupabaseClient | null {
@@ -39,6 +39,7 @@ export default function Home() {
   const [orgId,setOrgId] = useState("");
   const [conversationId,setConversationId] = useState<string|null>(null);
   const [token,setToken] = useState("");
+  const [currentUserId,setCurrentUserId] = useState("");
   const [authText,setAuthText] = useState("");
   const [draft,setDraft] = useState("");
   const [busy,setBusy] = useState(false);
@@ -49,7 +50,7 @@ export default function Home() {
   useEffect(()=>{
     fetch("/api/health",{cache:"no-store"}).then(r=>r.json()).then(setHealth).catch(()=>setHealth(null));
     const client=getBrowserSupabase();
-    if(client) client.auth.getSession().then(({data})=>{if(data.session?.access_token)setToken(data.session.access_token);});
+    if(client) client.auth.getSession().then(({data})=>{if(data.session?.access_token)setToken(data.session.access_token);if(data.session?.user?.id)setCurrentUserId(data.session.user.id);});
   },[]);
 
   useEffect(()=>{
@@ -58,7 +59,7 @@ export default function Home() {
     let cancelled=false;
     fetch("/api/ai/run",{method:"GET",headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"})
       .then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error??"Could not restore chat history.");return data;})
-      .then(data=>{if(cancelled)return;setConversationId(data.conversationId??null);if(Array.isArray(data.messages)&&data.messages.length){setMessages(data.messages.map((m:{id:string;role:"user"|"assistant";content:string},index:number)=>({id:Date.now()+index,role:m.role==="user"?"user":"assistant",content:m.content})));}})
+      .then(data=>{if(cancelled)return;setConversationId(data.conversationId??null);if(Array.isArray(data.messages)&&data.messages.length){setMessages(data.messages.map((m:{id:string;role:"user"|"assistant";content:string;actor_user_id?:string|null},index:number)=>({id:Date.now()+index,role:m.role==="user"?"user":"assistant",content:m.content,actorUserId:m.actor_user_id??null})));}})
       .catch(()=>{if(!cancelled)setAuthText("Workspace connected, but previous chat history could not be restored.");});
     return ()=>{cancelled=true;};
   },[token,orgId]);
@@ -150,13 +151,13 @@ export default function Home() {
     if(!orgId.trim()){setAuthText("Enter the Business Command Centre organisation UUID.");return;}
     const {data,error}=await client.auth.signInWithPassword({email,password});
     if(error||!data.session){setAuthText(error?.message??"Sign-in failed.");return;}
-    setToken(data.session.access_token); setAuthText("Secure session connected.");
+    setToken(data.session.access_token); setCurrentUserId(data.user.id); setAuthText("Secure session connected.");
   }
 
   async function send(text?:string, task: "business_advice" | "prospect_discovery" | "company_research" | "lead_qualification" | "outreach_draft" | "reply_analysis" = "business_advice"){
     const question=(text??draft).trim();
     if(!question||busy)return;
-    setMessages(old=>[...old,{id:Date.now(),role:"user",content:question}]);
+    setMessages(old=>[...old,{id:Date.now(),role:"user",content:question,actorUserId:currentUserId}]);
     setDraft(""); setBusy(true);
     if(!token||!orgId.trim()||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orgId.trim())){
       setMessages(old=>[...old,{id:Date.now()+1,role:"assistant",content:"I have received your instruction, but the secure company workspace is not connected. Sign in and enter the organisation UUID first. I will not invent company records or pretend an action has been completed."}]);
@@ -195,6 +196,7 @@ export default function Home() {
     const client=getBrowserSupabase();
     if(client) await client.auth.signOut();
     setToken("");
+    setCurrentUserId("");
     setConversationId(null);
     setMessages([{id:Date.now(),role:"assistant",content:"You have signed out of the company workspace. Sign in again to continue."}]);
     setAuthText("Signed out securely.");
@@ -236,7 +238,7 @@ export default function Home() {
           <section className="lower-grid"><article className="panel"><div className="eyebrow">COMPANY PULSE</div><h2>Operations overview</h2>{workspace?<><div className="pulse-stat"><span>Pending approvals</span><b>{workspace.summary?.pendingApprovals??0}</b><button onClick={()=>setActive("Approvals")}>Review ↗</button></div><div className="pulse-stat"><span>Net recorded finance</span><b>{naira(workspace.summary?.netNgn??0)}</b><button onClick={()=>setActive("Finance")}>Open ledger ↗</button></div><div className="pulse-stat"><span>Active projects</span><b>{workspace.summary?.activeProjects??0}</b><button onClick={()=>setActive("Projects")}>View projects ↗</button></div></>:<div className="empty"><span>⌁</span><b>Connect the company workspace</b><p>Verified company activity and financial totals will appear here after secure sign-in.</p></div>}</article><article className="panel"><div className="eyebrow">CONNECTED ECOSYSTEM</div><h2>Registered products</h2>{(workspace?.products??[]).slice(0,4).map(item=><div className="product" key={item.id}><span>{item.product_name.slice(0,2).toUpperCase()}</span><div><b>{item.product_name}</b><small>{item.integration_mode} · {item.dashboard_url??"No dashboard URL"}</small></div><em>{item.health_status}</em></div>)}{!workspace?.products?.length?<div className="empty"><b>No registered products yet</b><p>Register independent Samzy products in Product Registry.</p></div>:null}<button className="inline-action" onClick={()=>setActive("Product Registry")}>Open Product Registry ↗</button></article></section>
         </>:active==="AI General Manager"?<section className="chat-panel">
           <div className="chat-title"><div><div className="eyebrow">THE COMPANY'S INTELLIGENCE PARTNER</div><h2>Talk to your AI General Manager</h2><p>Ask questions, give instructions, plan and analyse company operations.</p></div><span className="chip">⌑ Private company workspace</span></div>
-          <div className="chat-body"><div className="messages">{messages.map(m=><div className={m.role==="user"?"message mine":"message"} key={m.id}><span className="message-avatar">{m.role==="user"?"ST":"✳"}</span><div><b>{m.role==="user"?"Samzy Technology Limited":"AI General Manager"}</b><p>{m.content}</p></div></div>)}{busy?<div className="working">The company intelligence team is working…</div>:null}</div><form className="composer" onSubmit={e=>{e.preventDefault();void send();}}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Ask your AI General Manager anything, or give it a command…" rows={2}/><div><small>Enter to send · Shift + Enter for a new line</small><button className="primary" disabled={busy||!draft.trim()}>Send command ↗</button></div></form></div>
+          <div className="chat-body"><div className="messages">{messages.map(m=><div className={m.role==="user"?"message mine":"message"} key={m.id}><span className="message-avatar">{m.role==="user"?"ST":"✳"}</span><div><b>{m.role==="user"?(m.actorUserId&&currentUserId&&m.actorUserId===currentUserId?"You · Samzy Technology Limited":"Company team"):"AI General Manager"}</b><p>{m.content}</p></div></div>)}{busy?<div className="working">The company intelligence team is working…</div>:null}</div><form className="composer" onSubmit={e=>{e.preventDefault();void send();}}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Ask your AI General Manager anything, or give it a command…" rows={2}/><div><small>Enter to send · Shift + Enter for a new line</small><button className="primary" disabled={busy||!draft.trim()}>Send command ↗</button></div></form></div>
           <aside className="chat-side"><article className="connect"><h3>Connect company workspace</h3><p>Secure administrator sign-in</p><form onSubmit={signIn}><label htmlFor="workspace-email">Company email</label><input id="workspace-email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@company.com" required/><label htmlFor="workspace-password">Password</label><input id="workspace-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Workspace password" required/><label htmlFor="workspace-org-id">Organisation UUID</label><input id="workspace-org-id" value={orgId} onChange={e=>setOrgId(e.target.value)} placeholder="Business workspace ID" required/><button className="connect-button">{token?"Refresh session":"Connect workspace"}</button></form>{authText?<p className="auth-text">{authText}</p>:null}<small>Password authentication is handled by Supabase Auth. The dashboard does not store your password.</small></article><article className="suggest"><h3>Try asking</h3>{starters.map(s=><button key={s} onClick={()=>void send(s)}>{s}<span>↗</span></button>)}</article></aside>
         </section>:<section className="panel module-workspace">
           <div className="module-heading"><div><div className="eyebrow">LIVE COMPANY WORKSPACE</div><h2>{active}</h2><p>Company records are loaded from your authenticated, organisation-scoped workspace.</p></div><button className="inline-action" onClick={()=>setActive("AI General Manager")}>Discuss with AI Manager ↗</button></div>
