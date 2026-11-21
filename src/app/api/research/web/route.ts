@@ -27,9 +27,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: cause instanceof z.ZodError ? cause.issues[0]?.message ?? "Invalid search request." : "Invalid request body." }, { status: 400, headers: noStore });
   }
 
-  const apiKey = process.env.BRAVE_SEARCH_API_KEY ?? "";
-  if (!apiKey) return NextResponse.json({ error: "Live web research is not configured. Add BRAVE_SEARCH_API_KEY as a server-only environment variable." }, { status: 503, headers: noStore });
-
   try {
     const db = createServerSupabaseClient();
     const { data: authData, error: authError } = await db.auth.getUser(token);
@@ -40,6 +37,16 @@ export async function POST(request: NextRequest) {
     if (!member || !["owner","admin","manager"].includes(member.role)) {
       return NextResponse.json({ error: "You cannot research prospects for this organisation." }, { status: 403, headers: noStore });
     }
+    const apiKey = process.env.BRAVE_SEARCH_API_KEY ?? "";
+    if (!apiKey) return NextResponse.json({ error: "Live web research is not configured. Add BRAVE_SEARCH_API_KEY as a server-only environment variable." }, { status: 503, headers: noStore });
+    const { data: withinLimit, error: limitError } = await db.rpc("consume_ai_rate_limit", {
+      p_organization_id: organizationId,
+      p_user_id: authData.user.id,
+      p_limit: 30,
+      p_window_seconds: 3600,
+    });
+    if (limitError) throw new Error("Could not enforce the research usage limit.");
+    if (!withinLimit) return NextResponse.json({ error: "The shared AI/research limit is 30 requests per hour for this user and organisation." }, { status: 429, headers: noStore });
     const evidence = await searchBusinessWeb(input.query, apiKey, input.country);
     return NextResponse.json({ evidence, capturedAt: new Date().toISOString(), source: "Brave Search" }, { headers: noStore });
   } catch {
