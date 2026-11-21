@@ -386,7 +386,7 @@ test("Sales workspace saves eligible outreach as a draft without sending", async
   await page.locator("nav").getByRole("button", { name: /Sales & Outreach/ }).click();
   await page.locator('select[name="contact_point_id"]').selectOption("contact-verified-1");
   await page.getByPlaceholder("Write a specific, personalised message for this prospect…").fill("Hello, I reviewed your business website and would like to discuss a possible website improvement project.");
-  await page.getByRole("button", { name: "Save outreach draft — do not send" }).click();
+  await page.getByRole("button", { name: "Save outreach draft" }).click();
   await expect.poll(() => records.outreach.length).toBe(1);
   expect(records.outreach[0].status).toBe("draft");
   expect(records.outreach[0].direction).toBe("outbound");
