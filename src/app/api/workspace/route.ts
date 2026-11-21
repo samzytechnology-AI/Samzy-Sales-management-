@@ -92,8 +92,9 @@ export async function POST(request: NextRequest) {
     if (new TextEncoder().encode(raw).byteLength > 16_384) return error("Request is too large.", 413);
     const input = createSchema.parse(JSON.parse(raw));
     const { db, organizationId, user } = auth;
-    if (input.type === "prospect" && input.website_url) {
-      const normalizedWebsite = new URL(input.website_url).toString();
+    const normalizedProspectWebsite = input.type === "prospect" && input.website_url ? new URL(input.website_url).toString() : undefined;
+    if (input.type === "prospect" && normalizedProspectWebsite) {
+      const normalizedWebsite = normalizedProspectWebsite;
       const { data: duplicate, error: duplicateError } = await db.from("prospects")
         .select("id,company_name").eq("organization_id", organizationId)
         .eq("website_url", normalizedWebsite).maybeSingle();
@@ -110,6 +111,7 @@ export async function POST(request: NextRequest) {
     }
     const table = input.type === "client" ? "clients" : input.type === "project" ? "projects" : input.type === "prospect" ? "prospects" : input.type === "finance" ? "financial_transactions" : input.type === "product" ? "product_registry" : "approval_requests";
     const payload: Record<string, unknown> = { ...input, organization_id: organizationId };
+    if (normalizedProspectWebsite) payload.website_url = normalizedProspectWebsite;
     delete payload.type;
     if (input.type === "finance") payload.recorded_by = user.id;
     if (input.type === "approval") payload.requested_by = user.id;
