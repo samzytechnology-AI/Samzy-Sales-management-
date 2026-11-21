@@ -32,7 +32,7 @@ async function connectMockWorkspace(page: import("@playwright/test").Page) {
         await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Unknown mock record type" }) });
         return;
       }
-      const record = { ...input, id: `mock-${records[key].length + 1}`, status: input.type === "approval" ? "pending" : input.status ?? "active" };
+      const record = { ...input, ...(input.type === "contact_point" ? { address: input.channel === "email" ? String(input.address).toLowerCase() : input.address, is_verified: false } : {}), id: `mock-${records[key].length + 1}`, status: input.type === "approval" ? "pending" : input.status ?? "active" };
       records[key].unshift(record);
       await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ record }) });
       return;
@@ -275,6 +275,6 @@ test("CRM stores prospect contact points as unverified until verification occurs
   await row.getByPlaceholder("Contact source / consent basis (optional)").fill("Published company contact page");
   await row.getByRole("button", { name: "Add contact" }).click();
   await expect.poll(() => records.contactPoints.length).toBe(1);
-  expect(records.contactPoints[0].address).toBe("SALES@EXAMPLE.COM");
+  expect(records.contactPoints[0].address).toBe("sales@example.com");
   await expect(row.locator(".contact-points")).toContainText("Unverified");
 });
