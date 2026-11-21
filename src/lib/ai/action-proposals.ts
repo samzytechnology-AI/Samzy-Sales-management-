@@ -67,7 +67,7 @@ export function extractAIActionProposal(content: string, allowProposal = true): 
 } {
   if (!allowProposal) {
     const containsProposal = content.includes(OPEN);
-    return { cleanContent: content.replace(/\[\[SAMZY_ACTION_PROPOSAL\]\][\s\S]*?(?:\[\[\/SAMZY_ACTION_PROPOSAL\]\]|$)/g, "").trim(), warning: containsProposal ? "The model synthesis was unavailable, so no action proposal was submitted." : undefined };
+    return { cleanContent: content.replace(/\[\[SAMZY_ACTION_PROPOSAL\]\][\s\S]*?(?:\[\[\/SAMZY_ACTION_PROPOSAL\]\]|$)/g, "").trim(), warning: containsProposal ? "The coordinated AI result was not eligible, so no action proposal was submitted." : undefined };
   }
   const occurrences = content.split(OPEN).length - 1;
   if (occurrences === 0) return { cleanContent: content.trim() };
