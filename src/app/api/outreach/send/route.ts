@@ -123,14 +123,20 @@ export async function POST(request: NextRequest) {
       .update({ status: "sent", provider_message_id: sent.messageId, sent_at: new Date().toISOString() })
       .eq("id", event.id).eq("organization_id", organizationId).eq("status", "sending");
     if (updateError) {
-      return NextResponse.json({ status: "provider_accepted_database_update_failed", messageId: sent.messageId, warning: "The provider accepted the email, but the CRM status could not be updated. Do not resend until an administrator reconciles the message." }, { status: 202, headers: noStore });
+      await db.from("outreach_events").update({ status: "send_unknown" })
+        .eq("id", event.id).eq("organization_id", organizationId).eq("status", "sending");
+      return NextResponse.json({ status: "send_unknown", messageId: sent.messageId, warning: "The provider accepted the email, but the CRM status could not be confirmed. Do not resend until an administrator reconciles the message." }, { status: 202, headers: noStore });
     }
-    await db.from("audit_events").insert({
+    const { error: auditError } = await db.from("audit_events").insert({
       organization_id: organizationId, actor_user_id: authData.user.id, actor_type: "user",
       action: "outreach.email.sent", entity_type: "outreach_event", entity_id: event.id,
       metadata: { provider: "resend", provider_message_id: sent.messageId },
     });
-    return NextResponse.json({ status: "sent", messageId: sent.messageId }, { headers: noStore });
+    return NextResponse.json({
+      status: "sent",
+      messageId: sent.messageId,
+      ...(auditError ? { warning: "The email was sent and recorded, but the audit event could not be saved. An administrator should review the audit log." } : {}),
+    }, { headers: noStore });
   } catch (cause) {
     const ambiguous = !(cause instanceof ResendDeliveryError) || cause.ambiguous;
     await db.from("outreach_events").update({ status: ambiguous ? "send_unknown" : "failed" })
