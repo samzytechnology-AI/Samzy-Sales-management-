@@ -296,7 +296,7 @@ export default function Home() {
     const result=await response.json();
     if(!response.ok||!result.session){setAuthText(result.error??"Sign-in failed.");return;}
     const {data,error}=await client.auth.setSession({access_token:result.session.access_token,refresh_token:result.session.refresh_token});
-    if(error||!data.session){setAuthText("The secure session could not be established. Please try again.");return;}
+    if(error||!data.session||!data.user){setAuthText("The secure session could not be established. Please try again.");return;}
     setToken(data.session.access_token); setCurrentUserId(data.user.id); setAuthText("Secure session connected.");
   }
 
