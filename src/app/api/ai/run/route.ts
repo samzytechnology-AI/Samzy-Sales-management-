@@ -244,11 +244,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await supabase.from("ai_runs").update({
+    const { error: runUpdateError } = await supabase.from("ai_runs").update({
       synthesis: assistantContent,
       warnings: runWarnings,
       request_metadata: { conversation_id: conversationId, proposed_action_id: proposedAction?.id ?? null },
     }).eq("id", runRecord.id).eq("organization_id", organizationId);
+    if (runUpdateError) throw new Error("The AI result was generated, but its final run record could not be updated.");
 
     const { error: assistantMessageError } = await supabase.from("ai_messages").insert({
       organization_id: organizationId,
