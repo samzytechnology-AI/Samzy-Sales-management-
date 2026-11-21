@@ -393,6 +393,24 @@ test("Sales workspace saves eligible outreach as a draft without sending", async
   await expect(page.getByText("outbound · email · hello@research.example")).toBeVisible();
 });
 
+test("CRM prospect can launch a source-grounded sales plan in the AI Manager", async ({ page }) => {
+  const records = await connectMockWorkspace(page);
+  records.prospects.push({ id: "research-prospect-1", company_name: "Research Test Company", status: "qualified", industry: "Education" });
+  let aiRequest: Record<string, any> | null = null;
+  await page.route("**/api/research/web", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ evidence: [{ url: "https://research-test.example", title: "Research Test Company", excerpt: "Official business information." }] }) }));
+  await page.route("**/api/ai/run", async route => {
+    aiRequest = route.request().postDataJSON() as Record<string, any>;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ conversationId: "77777777-7777-4777-8777-777777777777", synthesis: "Sales plan prepared with source evidence.", warnings: [] }) });
+  });
+  await page.locator("nav").getByRole("button", { name: /Leads & CRM/ }).click();
+  await expect(page.getByText("Research Test Company")).toBeVisible();
+  await page.getByRole("button", { name: "Build sales plan" }).click();
+  await expect(page.locator(".messages")).toContainText("Sales plan prepared with source evidence.");
+  expect(aiRequest?.task).toBe("company_research");
+  expect(aiRequest?.evidence?.[0]?.url).toBe("https://research-test.example");
+  expect(aiRequest?.objective).toContain("Research Test Company");
+});
+
 test("Sales workspace can send an eligible email draft after an owner action", async ({ page }) => {
   const records = await connectMockWorkspace(page);
   records.prospects.push({ id: "send-prospect-1", company_name: "Send Test Company", status: "qualified" });
