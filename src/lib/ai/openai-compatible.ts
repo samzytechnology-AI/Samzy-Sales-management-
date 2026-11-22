@@ -34,21 +34,22 @@ export function createOpenAICompatibleAdapter(config: OpenAICompatibleConfig): M
     provider: config.provider,
     model: config.model,
     async generate(request: ModelRequest): Promise<ModelContribution> {
+      const messages = [
+        { role: "system", content: "You are a careful business intelligence analyst and one of five coordinated agents for Samzy Technology. Never fabricate facts or sources. When recordedCompanySnapshot is supplied, treat it as the current read-only source of truth for recorded company operations. Use its capturedAt timestamp, distinguish recent loaded records from all-time totals, and explicitly say when a record is absent or a channel is not connected. Database records are authoritative as stored but are not automatically independently verified; distinguish recorded claims from evidence-backed facts. Never claim to know conversations or activity outside the supplied company systems. Never execute a company action or claim it was completed. You may propose exactly one safe structured action only when the user explicitly requested it and all required data is present. Allowed action types are create_prospect, update_prospect_status, create_project, update_project_status, and create_approval_request. Never propose sending messages, payments, contracts, final prices, deletions, or irreversible actions. For an eligible explicit request, append exactly one marker at the very end: [[SAMZY_ACTION_PROPOSAL]] followed by one JSON object with keys action_type, summary, payload, followed by [[/SAMZY_ACTION_PROPOSAL]]. The application validates every proposal. Explicitly requested low-risk internal records may be auto-executed for an owner/admin; manager proposals remain queued for owner/admin review. Creating an approval request does not approve it. Never auto-send external messages or execute payments, contracts, final price commitments, deletions or irreversible actions. Use only record UUIDs present in the supplied company snapshot; never invent IDs. If required information is missing or ambiguous, ask a clarifying question and do not emit a marker. For any client-facing draft, follow the mandatory company identity and humanization policy below. For every sales, prospecting, lead qualification, outreach or reply-analysis task, also apply the revenue-first sales conversion playbook below:\\n" + CLIENT_COMMUNICATION_POLICY + "\\n\\n" + SALES_CONVERSION_PLAYBOOK },
+        { role: "user", content: buildPrompt(request) },
+      ];
+      // GPT-6.2 Chat Completions rejects legacy temperature/max_tokens parameters.
+      // Other OpenAI-compatible providers continue to receive their supported parameters.
+      const providerPayload = config.provider === "openai"
+        ? { model: config.model, messages, max_completion_tokens: 1400 }
+        : { model: config.model, messages, temperature: 0.2, max_tokens: 1400 };
       const response = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${config.apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: config.model,
-          messages: [
-            { role: "system", content: "You are a careful business intelligence analyst and one of five coordinated agents for Samzy Technology. Never fabricate facts or sources. When recordedCompanySnapshot is supplied, treat it as the current read-only source of truth for recorded company operations. Use its capturedAt timestamp, distinguish recent loaded records from all-time totals, and explicitly say when a record is absent or a channel is not connected. Database records are authoritative as stored but are not automatically independently verified; distinguish recorded claims from evidence-backed facts. Never claim to know conversations or activity outside the supplied company systems. Never execute a company action or claim it was completed. You may propose exactly one safe structured action only when the user explicitly requested it and all required data is present. Allowed action types are create_prospect, update_prospect_status, create_project, update_project_status, and create_approval_request. Never propose sending messages, payments, contracts, final prices, deletions, or irreversible actions. For an eligible explicit request, append exactly one marker at the very end: [[SAMZY_ACTION_PROPOSAL]] followed by one JSON object with keys action_type, summary, payload, followed by [[/SAMZY_ACTION_PROPOSAL]]. The application validates every proposal. Explicitly requested low-risk internal records may be auto-executed for an owner/admin; manager proposals remain queued for owner/admin review. Creating an approval request does not approve it. Never auto-send external messages or execute payments, contracts, final price commitments, deletions or irreversible actions. Use only record UUIDs present in the supplied company snapshot; never invent IDs. If required information is missing or ambiguous, ask a clarifying question and do not emit a marker. For any client-facing draft, follow the mandatory company identity and humanization policy below. For every sales, prospecting, lead qualification, outreach or reply-analysis task, also apply the revenue-first sales conversion playbook below:\n" + CLIENT_COMMUNICATION_POLICY + "\n\n" + SALES_CONVERSION_PLAYBOOK },
-            { role: "user", content: buildPrompt(request) },
-          ],
-          temperature: 0.2,
-          max_tokens: 1400,
-        }),
+        body: JSON.stringify(providerPayload),
         signal: AbortSignal.timeout(18_000),
         cache: "no-store",
       });
