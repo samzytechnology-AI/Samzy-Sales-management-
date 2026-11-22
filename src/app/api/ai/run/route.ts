@@ -5,6 +5,7 @@ import { extractAIActionProposal } from "@/lib/ai/action-proposals";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const uuidSchema = z.string().uuid();
 const bodySchema = z.object({
