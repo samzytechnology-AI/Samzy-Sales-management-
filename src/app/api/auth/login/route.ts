@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -32,6 +32,14 @@ export async function POST(request: NextRequest) {
   const expectedUsername = (process.env.DASHBOARD_LOGIN_USERNAME ?? "").trim().toUpperCase();
   const expectedPassword = process.env.DASHBOARD_LOGIN_PASSWORD ?? "";
   const ownerEmail = (process.env.DASHBOARD_LOGIN_EMAIL ?? "").trim().toLowerCase();
+  // Keep the short owner-facing password separate from Supabase Auth. Supabase
+  // enforces a six-character minimum; this deterministic server-only credential
+  // is long, never sent to the browser, and changes whenever the owner password changes.
+  const supabaseOwnerPassword = createHash("sha256")
+    .update("samzy-owner-auth-v1")
+    .update(ownerEmail)
+    .update(expectedPassword)
+    .digest("hex") + "Aa1!";
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -59,7 +67,7 @@ export async function POST(request: NextRequest) {
     if (!owner) {
       const { data, error } = await admin.auth.admin.createUser({
         email: ownerEmail,
-        password: expectedPassword,
+        password: supabaseOwnerPassword,
         email_confirm: true,
         user_metadata: { username: expectedUsername },
       });
@@ -67,7 +75,7 @@ export async function POST(request: NextRequest) {
       owner = data.user;
     } else {
       const { data, error } = await admin.auth.admin.updateUserById(owner.id, {
-        password: expectedPassword,
+        password: supabaseOwnerPassword,
         email_confirm: true,
         user_metadata: { ...owner.user_metadata, username: expectedUsername },
       });
@@ -88,7 +96,7 @@ export async function POST(request: NextRequest) {
     });
     const { data, error } = await publicClient.auth.signInWithPassword({
       email: ownerEmail,
-      password: expectedPassword,
+      password: supabaseOwnerPassword,
     });
     if (error || !data.session) throw error ?? new Error("Supabase did not return a session.");
 
