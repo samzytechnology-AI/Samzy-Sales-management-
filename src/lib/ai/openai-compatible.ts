@@ -49,7 +49,7 @@ export function createOpenAICompatibleAdapter(config: OpenAICompatibleConfig): M
           temperature: 0.2,
           max_tokens: 1400,
         }),
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(18_000),
         cache: "no-store",
       });
 
