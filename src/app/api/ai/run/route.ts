@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const synthesisAvailable = result.contributions.length === 3 && !result.warnings.some(warning => warning.startsWith("Synthesis pass failed"));
+    const synthesisAvailable = result.contributions.length >= 1 && !result.warnings.some(warning => warning.startsWith("Synthesis pass failed"));
     const proposalExtraction = extractAIActionProposal(result.synthesis, synthesisAvailable);
     const runWarnings = [...result.warnings];
     if (proposalExtraction.warning) runWarnings.push(proposalExtraction.warning);
@@ -306,13 +306,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...result, synthesis: assistantContent, warnings: runWarnings, proposedAction, conversationId, runId: runRecord.id }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI execution failed.";
-    const safeMessage = message.includes("provider configuration missing")
-      ? message
-      : message.includes("exceeds the 60 KB")
+    // Log actionable provider/DB diagnostics server-side; never log request bodies, tokens, or API keys.
+    console.error("[business-ai] request failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+      task: body.task,
+    });
+    const safeMessage = message.includes("All AI providers failed.")
+      ? message.slice(0, 900)
+      : message.includes("provider configuration missing")
         ? message
-        : message.includes("AI usage limits")
+        : message.includes("exceeds the 60 KB")
           ? message
-          : "Business AI could not complete this request. Check provider configuration and server logs.";
+          : message.includes("AI usage limits")
+            ? message
+            : "Business AI could not complete this request. The server recorded a diagnostic error; check the latest function logs.";
     return jsonError(safeMessage, 503);
   }
 }
