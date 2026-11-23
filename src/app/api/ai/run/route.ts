@@ -10,8 +10,8 @@ export const maxDuration = 60;
 const uuidSchema = z.string().uuid();
 const bodySchema = z.object({
   task: z.enum(["prospect_discovery", "company_research", "lead_qualification", "outreach_draft", "reply_analysis", "business_advice"]),
-  objective: z.string().trim().min(12).max(2_000),
-  context: z.record(z.unknown()).default({}),
+  objective: z.string().trim().min(1, "Enter a message before sending.").max(8_000, "Your message is too long (maximum 8,000 characters)."),
+  context: z.record(z.string(), z.unknown()).default({}),
   conversationId: uuidSchema.optional(),
   editMessageId: uuidSchema.optional(),
   evidence: z.array(z.object({
@@ -38,16 +38,33 @@ export async function POST(request: NextRequest) {
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
   if (declaredLength > 64 * 1024) return jsonError("The request is too large. Keep it under 64 KB.", 413);
 
-  let body: z.infer<typeof bodySchema>;
+  let rawBody: string;
   try {
-    const rawBody = await request.text();
-    if (new TextEncoder().encode(rawBody).byteLength > 64 * 1024) {
-      return jsonError("The request is too large. Keep it under 64 KB.", 413);
-    }
-    body = bodySchema.parse(JSON.parse(rawBody));
+    rawBody = await request.text();
   } catch {
-    return jsonError("The AI request body is invalid.", 400);
+    return jsonError("The AI request body could not be read. Please try sending again.", 400);
   }
+  if (new TextEncoder().encode(rawBody).byteLength > 64 * 1024) {
+    return jsonError("The request is too large. Keep it under 64 KB.", 413);
+  }
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(rawBody);
+  } catch {
+    return jsonError("The AI request was not valid JSON. Please retry your message.", 400);
+  }
+  const validatedBody = bodySchema.safeParse(parsedJson);
+  if (!validatedBody.success) {
+    const issues = validatedBody.error.issues.map(issue => ({
+      field: issue.path.length ? issue.path.join(".") : "body",
+      message: issue.message,
+    }));
+    return NextResponse.json(
+      { error: "The AI request did not match the expected format.", issues },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  const body = validatedBody.data;
 
   try {
     const supabase = createServerSupabaseClient();
