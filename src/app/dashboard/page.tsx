@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 type Health = { aiReady?: boolean; providers?: Array<{slot:string;provider:string|null;model:string|null;configured:boolean}>; supabaseConfigured?: boolean; researchReady?: boolean; emailOutreachReady?: boolean; gmailOAuthReady?: boolean; whatsappOutreachReady?: boolean; outboundEnabled?: boolean };
 type GmailMessage = { id:string; threadId:string; from:string; subject:string; date:string; snippet:string; body:string };
-type ChatMessage = { role: "user" | "assistant"; content: string; id: number; actorUserId?: string | null };
+type ChatMessage = { role: "user" | "assistant"; content: string; id: number; persistedId?: string; actorUserId?: string | null };
 type WorkspaceData = { summary?: { prospects:number; clients:number; activeProjects:number; pendingApprovals:number; incomeNgn:number; expensesNgn:number; netNgn:number }; canSendOutreach?:boolean; prospects?: any[]; clients?: any[]; projects?: any[]; products?: any[]; approvals?: any[]; finance?: any[]; outreach?: any[]; contactPoints?: any[]; tasks?: any[] };
 type AIAction = { id:string; action_type:string; summary:string; payload:Record<string,unknown>; status:string; requested_by:string; created_at:string; expires_at:string; execution_result?:Record<string,unknown>|null; failure_reason?:string|null };
 
@@ -28,6 +28,62 @@ const starters = [
   "Prepare a human, personalised outreach draft. Do not send it.",
   "Find Nigerian businesses that may need Samzy's website, app or automation services, then rank the strongest prospects.",
 ];
+
+
+function renderInlineMessage(text: string, prefix: string): ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|\x60[^\x60]+\x60)/g).filter(Boolean).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={prefix + index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("\x60") && part.endsWith("\x60")) return <code className="chat-inline-code" key={prefix + index}>{part.slice(1, -1)}</code>;
+    return <span key={prefix + index}>{part}</span>;
+  });
+}
+
+function renderMessageContent(content: string): ReactNode {
+  const lines = content.split("\n");
+  const blocks: ReactNode[] = [];
+  let paragraph: string[] = [];
+  let bullets: string[] = [];
+  let numbered: string[] = [];
+  let codeLines: string[] | null = null;
+  let blockIndex = 0;
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    const key = "p" + blockIndex++;
+    blocks.push(<p key={key}>{paragraph.map((line, index) => <span key={index}>{index ? <br /> : null}{renderInlineMessage(line, key + "-" + index)}</span>)}</p>);
+    paragraph = [];
+  };
+  const flushLists = () => {
+    if (bullets.length) { const key = "ul" + blockIndex++; blocks.push(<ul key={key}>{bullets.map((line, index) => <li key={index}>{renderInlineMessage(line, key + "-" + index)}</li>)}</ul>); bullets = []; }
+    if (numbered.length) { const key = "ol" + blockIndex++; blocks.push(<ol key={key}>{numbered.map((line, index) => <li key={index}>{renderInlineMessage(line, key + "-" + index)}</li>)}</ol>); numbered = []; }
+  };
+  for (const line of lines) {
+    if (line.trim().startsWith("\x60\x60\x60")) {
+      flushParagraph(); flushLists();
+      if (codeLines === null) codeLines = [];
+      else { blocks.push(<pre className="chat-code-block" key={"code" + blockIndex++}><code>{codeLines.join("\n")}</code></pre>); codeLines = null; }
+      continue;
+    }
+    if (codeLines !== null) { codeLines.push(line); continue; }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph(); flushLists();
+      const key = "h" + blockIndex++;
+      const children = renderInlineMessage(heading[2], key);
+      blocks.push(heading[1].length === 1 ? <h3 key={key}>{children}</h3> : heading[1].length === 2 ? <h4 key={key}>{children}</h4> : <h5 key={key}>{children}</h5>);
+      continue;
+    }
+    const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+    const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (bullet) { flushParagraph(); if (numbered.length) flushLists(); bullets.push(bullet[1]); continue; }
+    if (ordered) { flushParagraph(); if (bullets.length) flushLists(); numbered.push(ordered[1]); continue; }
+    if (!line.trim()) { flushParagraph(); flushLists(); continue; }
+    if (bullets.length || numbered.length) flushLists();
+    paragraph.push(line);
+  }
+  flushParagraph(); flushLists();
+  if (codeLines !== null) blocks.push(<pre className="chat-code-block" key={"code" + blockIndex++}><code>{codeLines.join("\n")}</code></pre>);
+  return <div className="message-rich-content">{blocks}</div>;
+}
 
 export default function Home() {
   const [active,setActive] = useState("Overview");
@@ -56,9 +112,17 @@ export default function Home() {
   const [authText,setAuthText] = useState("");
   const [draft,setDraft] = useState("");
   const [busy,setBusy] = useState(false);
+  const [editingMessageId,setEditingMessageId] = useState<number|null>(null);
+  const [copiedMessageId,setCopiedMessageId] = useState<number|null>(null);
+  const composerRef = useRef<HTMLTextAreaElement|null>(null);
+  const messagesEndRef = useRef<HTMLDivElement|null>(null);
   const [messages,setMessages] = useState<ChatMessage[]>([
     {id:1,role:"assistant",content:"Welcome to the Samzy Technology command centre. I am your AI General Manager interface. Connect the secure company workspace to begin. I can help analyse operations, prepare plans, research opportunities and draft client communications. I will clearly distinguish verified company information from anything that is not yet connected."}
   ]);
+
+  useEffect(()=>{
+    messagesEndRef.current?.scrollIntoView({behavior:"smooth",block:"end"});
+  },[messages,busy]);
 
   useEffect(()=>{
     fetch("/api/health",{cache:"no-store"}).then(r=>r.json()).then(setHealth).catch(()=>setHealth(null));
@@ -72,7 +136,7 @@ export default function Home() {
     let cancelled=false;
     fetch("/api/ai/run",{method:"GET",headers:{Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},cache:"no-store"})
       .then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error??"Could not restore chat history.");return data;})
-      .then(data=>{if(cancelled)return;setConversationId(data.conversationId??null);if(Array.isArray(data.messages)&&data.messages.length){setMessages(data.messages.map((m:{id:string;role:"user"|"assistant";content:string;actor_user_id?:string|null},index:number)=>({id:Date.now()+index,role:m.role==="user"?"user":"assistant",content:m.content,actorUserId:m.actor_user_id??null})));}})
+      .then(data=>{if(cancelled)return;setConversationId(data.conversationId??null);if(Array.isArray(data.messages)&&data.messages.length){setMessages(data.messages.map((m:{id:string;role:"user"|"assistant";content:string;actor_user_id?:string|null},index:number)=>({id:Date.now()+index,role:m.role==="user"?"user":"assistant",content:m.content,persistedId:m.id,actorUserId:m.actor_user_id??null})));}})
       .catch(()=>{if(!cancelled)setAuthText("Workspace connected, but previous chat history could not be restored.");});
     return ()=>{cancelled=true;};
   },[token,orgId]);
@@ -303,10 +367,21 @@ export default function Home() {
   async function send(text?:string, task: "business_advice" | "prospect_discovery" | "company_research" | "lead_qualification" | "outreach_draft" | "reply_analysis" = "business_advice"){
     const question=(text??draft).trim();
     if(!question||busy)return;
-    setMessages(old=>[...old,{id:Date.now(),role:"user",content:question,actorUserId:currentUserId}]);
-    setDraft(""); setBusy(true);
+    const editingMessage=editingMessageId===null?undefined:messages.find(message=>message.id===editingMessageId);
+    const previousMessages=messages;
+    const messageId=Date.now();
+    if(editingMessage){
+      const editIndex=messages.findIndex(message=>message.id===editingMessage.id);
+      setMessages([...messages.slice(0,editIndex),{...editingMessage,id:messageId,content:question}]);
+    }else{
+      setMessages(old=>[...old,{id:messageId,role:"user",content:question,actorUserId:currentUserId}]);
+    }
+    setDraft("");
+    if(composerRef.current)composerRef.current.style.height="auto";
+    setBusy(true);
     if(!token||!orgId.trim()||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orgId.trim())){
-      setMessages(old=>[...old,{id:Date.now()+1,role:"assistant",content:"I have received your instruction, but the secure company workspace is not connected. Sign in and enter the organisation UUID first. I will not invent company records or pretend an action has been completed."}]);
+      if(editingMessage){setMessages(previousMessages);setDraft(question);}
+      else setMessages(old=>[...old,{id:Date.now()+1,role:"assistant",content:"I have received your instruction, but the secure company workspace is not connected. Sign in and enter the organisation UUID first. I will not invent company records or pretend an action has been completed."}]);
       setBusy(false);return;
     }
     try{
@@ -323,16 +398,17 @@ export default function Home() {
             [/\b(south africa|south african)\b/i,"ZA"],
           ] as Array<[RegExp,string]>;
           const country = countryMatch.find(([pattern])=>pattern.test(question))?.[1];
-          const researchResponse=await fetch("/api/research/web",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({query:question,...(country?{country}:{})})});
+          const researchResponse=await fetch("/api/research/web",{method:"POST",headers:{"Content-Type":"application/json",Authorization:\`Bearer \${token}\`,"x-organization-id":orgId.trim()},body:JSON.stringify({query:question,...(country?{country}:{})})});
           const researchResult=await researchResponse.json();
           if(researchResponse.ok&&Array.isArray(researchResult.evidence))evidence=researchResult.evidence;
           else researchWarning=researchResult.error??"Live web research was unavailable; the AI will use only connected company records.";
         }catch{researchWarning="Live web research was unavailable; the AI will use only connected company records.";}
       }
-      const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-organization-id":orgId.trim()},body:JSON.stringify({
+      const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:\`Bearer \${token}\`,"x-organization-id":orgId.trim()},body:JSON.stringify({
         task,objective:question,
         ...(evidence.length?{evidence}:{}),
         ...(conversationId?{conversationId}:{}),
+        ...(editingMessage?.persistedId?{editMessageId:editingMessage.persistedId}:{}),
         context:{
           product:"Samzy Business Command Centre",
           company:"Samzy Technology Limited",
@@ -353,10 +429,31 @@ export default function Home() {
       if(result.conversationId)setConversationId(result.conversationId);
       const allWarnings=[...(result.warnings??[]),...(researchWarning?[researchWarning]:[])];
       const answer=[result.synthesis,allWarnings.length?"\n\nNotes: "+allWarnings.join("; "):""].join("");
-      setMessages(old=>[...old,{id:Date.now()+2,role:"assistant",content:answer||"The AI service returned no synthesis."}]);
+      setMessages(old=>[...old.map(message=>message.id===messageId?{...message,persistedId:result.userMessageId??message.persistedId}:message),{id:Date.now()+2,role:"assistant",content:answer||"The AI service returned no synthesis."}]);
+      setEditingMessageId(null);
     }catch(err){
-      setMessages(old=>[...old,{id:Date.now()+3,role:"assistant",content:err instanceof Error?err.message:"Unable to reach the AI service."}]);
+      if(editingMessage){setMessages([...previousMessages,{id:Date.now()+3,role:"assistant",content:err instanceof Error?err.message:"Unable to reach the AI service."}]);setDraft(question);}
+      else setMessages(old=>[...old,{id:Date.now()+3,role:"assistant",content:err instanceof Error?err.message:"Unable to reach the AI service."}]);
     }finally{setBusy(false);}
+  }
+
+  async function copyMessage(id:number,content:string){
+    try{await navigator.clipboard.writeText(content);setCopiedMessageId(id);}
+    catch{setWorkspaceError("Clipboard access is unavailable in this browser. Select the message text and copy it manually.");}
+  }
+
+  function editMessage(message:ChatMessage){
+    if(busy||message.role!=="user")return;
+    setEditingMessageId(message.id);
+    setDraft(message.content);
+    setWorkspaceError("");
+    composerRef.current?.focus();
+  }
+
+  function cancelMessageEdit(){
+    setEditingMessageId(null);
+    setDraft("");
+    if(composerRef.current)composerRef.current.style.height="auto";
   }
 
   async function signOut(){
@@ -405,7 +502,7 @@ export default function Home() {
           <section className="lower-grid"><article className="panel"><div className="eyebrow">COMPANY PULSE</div><h2>Operations overview</h2>{workspace?<><div className="pulse-stat"><span>Pending approvals</span><b>{workspace.summary?.pendingApprovals??0}</b><button onClick={()=>setActive("Approvals")}>Review ↗</button></div><div className="pulse-stat"><span>Net recorded finance</span><b>{naira(workspace.summary?.netNgn??0)}</b><button onClick={()=>setActive("Finance")}>Open ledger ↗</button></div><div className="pulse-stat"><span>Active projects</span><b>{workspace.summary?.activeProjects??0}</b><button onClick={()=>setActive("Projects")}>View projects ↗</button></div></>:<div className="empty"><span>⌁</span><b>Connect the company workspace</b><p>Verified company activity and financial totals will appear here after secure sign-in.</p></div>}</article><article className="panel"><div className="eyebrow">CONNECTED ECOSYSTEM</div><h2>Registered products</h2>{(workspace?.products??[]).slice(0,4).map(item=><div className="product" key={item.id}><span>{item.product_name.slice(0,2).toUpperCase()}</span><div><b>{item.product_name}</b><small>{item.integration_mode} · {item.dashboard_url??"No dashboard URL"}</small></div><em>{item.health_status}</em></div>)}{!workspace?.products?.length?<div className="empty"><b>No registered products yet</b><p>Register independent Samzy products in Product Registry.</p></div>:null}<button className="inline-action" onClick={()=>setActive("Product Registry")}>Open Product Registry ↗</button></article></section>
         </>:active==="AI General Manager"?<section className="chat-panel">
           <div className="chat-title"><div><div className="eyebrow">THE COMPANY'S INTELLIGENCE PARTNER</div><h2>Talk to your AI General Manager</h2><p>Ask questions, give instructions, plan and analyse company operations.</p></div><span className="chip">⌑ Private company workspace</span></div>
-          <div className="chat-body"><div className="messages">{messages.map(m=><div className={m.role==="user"?"message mine":"message"} key={m.id}><span className="message-avatar">{m.role==="user"?"ST":"✳"}</span><div><b>{m.role==="user"?(m.actorUserId&&currentUserId&&m.actorUserId===currentUserId?"You · Samzy Technology Limited":"Company team"):"AI General Manager"}</b><p>{m.content}</p></div></div>)}{busy?<div className="working">The company intelligence team is working…</div>:null}</div><form className="composer" onSubmit={e=>{e.preventDefault();void send();}}><textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Ask your AI General Manager anything, or give it a command…" rows={2}/><div><small>Enter to send · Shift + Enter for a new line</small><button className="primary" disabled={busy||!draft.trim()}>Send command ↗</button></div></form></div>
+          <div className="chat-body"><div className="messages">{messages.map(m=><article className={m.role==="user"?"message mine":"message"} key={m.id}><span className="message-avatar">{m.role==="user"?"ST":"✳"}</span><div className="message-main"><div className="message-author">{m.role==="user"?(m.actorUserId&&currentUserId&&m.actorUserId===currentUserId?"You · Samzy Technology Limited":"Company team"):"AI General Manager"}</div><div className="message-bubble">{renderMessageContent(m.content)}</div><div className="message-actions"><button type="button" aria-label="Copy message" onClick={()=>void copyMessage(m.id,m.content)}>{copiedMessageId===m.id?"✓ Copied":"▢ Copy"}</button>{m.role==="user"?<button type="button" aria-label="Edit your message" onClick={()=>editMessage(m)}>✎ Edit</button>:null}</div></div></article>)}<div ref={messagesEndRef}/>{busy?<div className="working">The company intelligence team is working…</div>:null}</div><form className="composer" onSubmit={e=>{e.preventDefault();void send();}}>{editingMessageId!==null?<div className="editing-banner"><span>Editing your message · Sending will replace it and its later replies</span><button type="button" onClick={cancelMessageEdit}>Cancel</button></div>:null}<div className="composer-input-wrap"><textarea ref={composerRef} value={draft} onChange={e=>{setDraft(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=Math.min(e.currentTarget.scrollHeight,220)+"px";}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Message your AI General Manager…" rows={1} aria-label="Message your AI General Manager"/></div><div className="composer-footer"><small>{busy?"AI team is analysing your request…":"Enter to send · Shift + Enter for a new line"}</small><button className="primary" disabled={busy||!draft.trim()}>{busy?<><span className="send-spinner"/> Working…</>:editingMessageId!==null?"Update & send":"Send"} <span aria-hidden="true">↑</span></button></div></form></div>
           <aside className="chat-side"><article className="connect"><h3>Secure session active</h3><p>Administrator access confirmed</p><small>Your company workspace is protected by Supabase authentication and organisation-scoped access.</small></article><article className="suggest"><h3>Try asking</h3>{starters.map(s=><button key={s} onClick={()=>void send(s)}>{s}<span>↗</span></button>)}</article></aside>
         </section>:<section className="panel module-workspace">
           <div className="module-heading"><div><div className="eyebrow">LIVE COMPANY WORKSPACE</div><h2>{active}</h2><p>Company records are loaded from your authenticated, organisation-scoped workspace.</p></div><button className="inline-action" onClick={()=>setActive("AI General Manager")}>Discuss with AI Manager ↗</button></div>
