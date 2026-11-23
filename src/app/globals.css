@@ -78,3 +78,19 @@
   .composer-footer small{font-size:9px}
   .composer .primary{padding:9px 12px}
 }
+
+
+/* ChatGPT-like fixed composer and independently scrolling AI conversation */
+.content:has(.chat-panel){height:calc(100dvh - 67px);min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:12px}
+.content:has(.chat-panel)>.welcome{flex:0 0 auto;margin-bottom:14px}
+.content:has(.chat-panel)>.chat-panel{flex:1 1 auto;height:auto;min-height:0;overflow:hidden}
+.chat-panel{min-height:0}
+.chat-body{min-height:0;overflow:hidden}
+.messages{min-height:0;flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.composer{flex:0 0 auto;position:relative;z-index:2;background:#0d1929;padding-bottom:max(14px,env(safe-area-inset-bottom))}
+.composer-input-wrap{width:100%}
+.composer textarea{min-height:48px;max-height:220px;resize:none;overflow-y:auto;line-height:1.5}
+.chat-side{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.module-heading-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}
+@media(max-width:850px){.content:has(.chat-panel){height:calc(100dvh - 125px);padding-top:16px}.content:has(.chat-panel)>.welcome{margin-bottom:10px}.content:has(.chat-panel)>.welcome>div>p{max-width:560px}.content:has(.chat-panel)>.chat-panel{min-height:0}.chat-side{max-height:180px}}
+@media(max-width:560px){.content:has(.chat-panel){height:calc(100dvh - 122px);padding:12px 10px 8px}.content:has(.chat-panel)>.welcome{display:none}.content:has(.chat-panel)>.chat-panel{border-radius:10px}.chat-title{padding:12px 14px}.chat-title h2{font-size:15px}.chat-title p{font-size:10px}.messages{padding:14px 12px}.composer{padding:10px}.composer textarea{min-height:46px;font-size:14px}.composer-footer{gap:8px}.composer-footer .primary{width:auto;min-width:100px}.chat-side{max-height:145px}.module-heading-actions{width:100%;justify-content:flex-start}}
