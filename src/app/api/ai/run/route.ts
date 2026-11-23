@@ -411,7 +411,7 @@ export async function GET(request: NextRequest) {
         .insert({
           organization_id: organizationId,
           created_by: authData.user.id,
-          scope: "company",
+          scope: "personal",
           title: "New chat",
         })
         .select("id,title,updated_at")
@@ -433,7 +433,7 @@ export async function GET(request: NextRequest) {
       .from("ai_conversations")
       .select("id")
       .eq("organization_id", organizationId)
-      .eq("scope", "company")
+      .or(`scope.eq.company,and(scope.eq.personal,created_by.eq.${authData.user.id})`)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -455,7 +455,6 @@ export async function GET(request: NextRequest) {
       .select("id,title,updated_at")
       .eq("id", sharedConversationId)
       .eq("organization_id", organizationId)
-      .eq("scope", "company")
       .maybeSingle();
     if (conversationError || !conversation) throw new Error("Could not load your shared company conversation.");
 
