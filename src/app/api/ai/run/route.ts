@@ -429,12 +429,26 @@ export async function GET(request: NextRequest) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
 
-    const { data: sharedConversationId, error: sharedConversationError } = await supabase.rpc("get_or_create_company_ai_conversation", {
-      p_organization_id: organizationId,
-      p_user_id: authData.user.id,
-      p_title: "Samzy Technology — AI General Manager",
-    });
-    if (sharedConversationError || !sharedConversationId) throw new Error("Could not open the shared company AI conversation.");
+    const { data: recentConversation, error: recentConversationError } = await supabase
+      .from("ai_conversations")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("scope", "company")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (recentConversationError) throw new Error("Could not find the latest company conversation.");
+
+    let sharedConversationId = recentConversation?.id as string | undefined;
+    if (!sharedConversationId) {
+      const { data: createdConversationId, error: sharedConversationError } = await supabase.rpc("get_or_create_company_ai_conversation", {
+        p_organization_id: organizationId,
+        p_user_id: authData.user.id,
+        p_title: "Samzy Technology — AI General Manager",
+      });
+      if (sharedConversationError || !createdConversationId) throw new Error("Could not open the shared company AI conversation.");
+      sharedConversationId = createdConversationId as string;
+    }
 
     const { data: conversation, error: conversationError } = await supabase
       .from("ai_conversations")
