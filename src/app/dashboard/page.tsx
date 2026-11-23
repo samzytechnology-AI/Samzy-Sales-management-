@@ -410,9 +410,16 @@ export default function Home() {
           else researchWarning=researchResult.error??"Live web research was unavailable; the AI will use only connected company records.";
         }catch{researchWarning="Live web research was unavailable; the AI will use only connected company records.";}
       }
+      const safeEvidence=evidence.slice(0,12).flatMap(item=>{
+        try{
+          const parsedUrl=new URL(item.url);
+          if(parsedUrl.protocol!=="https:"&&parsedUrl.protocol!=="http:")return [];
+          return [{url:parsedUrl.toString(),...(item.title?{title:item.title.slice(0,200)}:{}),...(item.excerpt?{excerpt:item.excerpt.slice(0,1200)}:{})}];
+        }catch{return [];}
+      });
       const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},body:JSON.stringify({
         task,objective:question,
-        ...(evidence.length?{evidence}:{}),
+        ...(safeEvidence.length?{evidence:safeEvidence}:{}),
         ...(conversationId?{conversationId}:{}),
         ...(editingMessage?.persistedId?{editMessageId:editingMessage.persistedId}:{}),
         context:{
