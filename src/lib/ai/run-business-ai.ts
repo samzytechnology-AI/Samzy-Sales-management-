@@ -4,8 +4,8 @@ import { coordinateModels } from "./orchestrator";
 
 const requestSchema = z.object({
   task: z.enum(["prospect_discovery", "company_research", "lead_qualification", "outreach_draft", "reply_analysis", "business_advice"]),
-  objective: z.string().trim().min(12).max(2_000),
-  context: z.record(z.unknown()).default({}),
+  objective: z.string().trim().min(1).max(8_000),
+  context: z.record(z.string(), z.unknown()).default({}),
   evidence: z.array(z.object({
     url: z.string().url().max(2_048),
     title: z.string().max(300).optional(),
