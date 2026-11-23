@@ -398,13 +398,13 @@ export default function Home() {
             [/\b(south africa|south african)\b/i,"ZA"],
           ] as Array<[RegExp,string]>;
           const country = countryMatch.find(([pattern])=>pattern.test(question))?.[1];
-          const researchResponse=await fetch("/api/research/web",{method:"POST",headers:{"Content-Type":"application/json",Authorization:\`Bearer \${token}\`,"x-organization-id":orgId.trim()},body:JSON.stringify({query:question,...(country?{country}:{})})});
+          const researchResponse=await fetch("/api/research/web",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},body:JSON.stringify({query:question,...(country?{country}:{})})});
           const researchResult=await researchResponse.json();
           if(researchResponse.ok&&Array.isArray(researchResult.evidence))evidence=researchResult.evidence;
           else researchWarning=researchResult.error??"Live web research was unavailable; the AI will use only connected company records.";
         }catch{researchWarning="Live web research was unavailable; the AI will use only connected company records.";}
       }
-      const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:\`Bearer \${token}\`,"x-organization-id":orgId.trim()},body:JSON.stringify({
+      const response=await fetch("/api/ai/run",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},body:JSON.stringify({
         task,objective:question,
         ...(evidence.length?{evidence}:{}),
         ...(conversationId?{conversationId}:{}),
