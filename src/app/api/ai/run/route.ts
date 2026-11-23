@@ -405,6 +405,30 @@ export async function GET(request: NextRequest) {
       return jsonError("You do not have permission to access this company workspace.", 403);
     }
 
+    if (new URL(request.url).searchParams.get("new") === "1") {
+      const { data: newConversation, error: newConversationError } = await supabase
+        .from("ai_conversations")
+        .insert({
+          organization_id: organizationId,
+          created_by: authData.user.id,
+          scope: "company",
+          title: "New chat",
+        })
+        .select("id,title,updated_at")
+        .single();
+      if (newConversationError || !newConversation) {
+        console.error("[business-ai] new conversation creation failed", {
+          message: newConversationError?.message ?? "No conversation row returned",
+        });
+        return jsonError("A new chat could not be created. Please try again.", 503);
+      }
+      return NextResponse.json({
+        conversationId: newConversation.id,
+        title: newConversation.title,
+        messages: [],
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+
     const { data: sharedConversationId, error: sharedConversationError } = await supabase.rpc("get_or_create_company_ai_conversation", {
       p_organization_id: organizationId,
       p_user_id: authData.user.id,
