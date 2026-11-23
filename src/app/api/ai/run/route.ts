@@ -5,6 +5,7 @@ import { extractAIActionProposal } from "@/lib/ai/action-proposals";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const uuidSchema = z.string().uuid();
 const bodySchema = z.object({
@@ -12,6 +13,7 @@ const bodySchema = z.object({
   objective: z.string().trim().min(12).max(2_000),
   context: z.record(z.unknown()).default({}),
   conversationId: uuidSchema.optional(),
+  editMessageId: uuidSchema.optional(),
   evidence: z.array(z.object({
     url: z.string().url().max(2_048),
     title: z.string().max(300).optional(),
@@ -165,14 +167,49 @@ export async function POST(request: NextRequest) {
       conversationId = sharedConversation as string;
     }
 
-    const { error: userMessageError } = await supabase.from("ai_messages").insert({
+    if (body.editMessageId) {
+      const { data: targetMessage, error: targetMessageError } = await supabase
+        .from("ai_messages")
+        .select("id,created_at")
+        .eq("id", body.editMessageId)
+        .eq("organization_id", organizationId)
+        .eq("conversation_id", conversationId)
+        .eq("role", "user")
+        .eq("actor_user_id", authData.user.id)
+        .maybeSingle();
+      if (targetMessageError) throw new Error("Could not verify the message selected for editing.");
+      if (!targetMessage) return jsonError("The message you selected cannot be edited in this company conversation.", 404);
+
+      const { data: laterUserMessages, error: laterMessagesError } = await supabase
+        .from("ai_messages")
+        .select("id,actor_user_id")
+        .eq("organization_id", organizationId)
+        .eq("conversation_id", conversationId)
+        .eq("role", "user")
+        .gt("created_at", targetMessage.created_at);
+      if (laterMessagesError) throw new Error("Could not verify later conversation messages.");
+      if ((laterUserMessages ?? []).some(message => message.actor_user_id !== authData.user.id)) {
+        return jsonError("This message cannot be edited because another company user has added a later message. Start a new message instead.", 409);
+      }
+
+      const { error: trimError } = await supabase
+        .from("ai_messages")
+        .delete()
+        .eq("organization_id", organizationId)
+        .eq("conversation_id", conversationId)
+        .gte("created_at", targetMessage.created_at);
+      if (trimError) throw new Error("Could not replace the selected message in conversation history.");
+    }
+
+    const { data: userMessage, error: userMessageError } = await supabase.from("ai_messages").insert({
       organization_id: organizationId,
       conversation_id: conversationId,
       role: "user",
       actor_user_id: authData.user.id,
       content: body.objective,
-    });
-    if (userMessageError) throw new Error("Could not save your message to company history.");
+    }).select("id").single();
+    if (userMessageError || !userMessage) throw new Error("Could not save your message to company history.");
+    const userMessageId = userMessage.id as string;
 
     const { data: history, error: historyError } = await supabase
       .from("ai_messages")
@@ -194,7 +231,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const synthesisAvailable = result.contributions.length === 3 && !result.warnings.some(warning => warning.startsWith("Synthesis pass failed"));
+    const synthesisAvailable = result.contributions.length >= 1 && !result.warnings.some(warning => warning.startsWith("Synthesis pass failed"));
     const proposalExtraction = extractAIActionProposal(result.synthesis, synthesisAvailable);
     const runWarnings = [...result.warnings];
     if (proposalExtraction.warning) runWarnings.push(proposalExtraction.warning);
@@ -303,16 +340,25 @@ export async function POST(request: NextRequest) {
     });
     if (auditError) throw new Error("The AI result was saved, but the audit record could not be completed.");
 
-    return NextResponse.json({ ...result, synthesis: assistantContent, warnings: runWarnings, proposedAction, conversationId, runId: runRecord.id }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ...result, synthesis: assistantContent, warnings: runWarnings, proposedAction, conversationId, runId: runRecord.id, userMessageId }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI execution failed.";
-    const safeMessage = message.includes("provider configuration missing")
-      ? message
-      : message.includes("exceeds the 60 KB")
+    // Log actionable provider/DB diagnostics server-side; never log request bodies, tokens, or API keys.
+    console.error("[business-ai] request failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+      task: body.task,
+    });
+    const safeMessage = message.includes("All AI providers failed.")
+      ? message.slice(0, 900)
+      : message.includes("provider configuration missing")
         ? message
-        : message.includes("AI usage limits")
+        : message.includes("exceeds the 60 KB")
           ? message
-          : "Business AI could not complete this request. Check provider configuration and server logs.";
+          : message.includes("AI usage limits")
+            ? message
+            : "Business AI could not complete this request. The server recorded a diagnostic error; check the latest function logs.";
     return jsonError(safeMessage, 503);
   }
 }
