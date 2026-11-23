@@ -87,6 +87,7 @@ function renderMessageContent(content: string): ReactNode {
 
 export default function Home() {
   const [active,setActive] = useState("Overview");
+  const [sidebarOpen,setSidebarOpen] = useState(true);
   const [openForm,setOpenForm] = useState<string|null>(null);
   const [health,setHealth] = useState<Health|null>(null);
   const [workspace,setWorkspace] = useState<WorkspaceData|null>(null);
@@ -471,11 +472,32 @@ export default function Home() {
     setAuthText("Signed out securely.");
   }
 
+  async function startNewChat(){
+    if(busy)return;
+    setDraft("");setEditingMessageId(null);setWorkspaceError("");
+    if(!token||!orgId.trim()){
+      setConversationId(null);
+      setMessages([{id:Date.now(),role:"assistant",content:"New chat ready. Sign in to the secure company workspace before sending a message."}]);
+      return;
+    }
+    setBusy(true);
+    try{
+      const response=await fetch("/api/ai/run?new=1",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
+      const result=await response.json();
+      if(!response.ok||!result.conversationId)throw new Error(result.error??"A new chat could not be created.");
+      setConversationId(result.conversationId);
+      setMessages([{id:Date.now(),role:"assistant",content:"New chat started. I'm ready to help with Samzy Technology's operations, sales, prospects and automation."}]);
+      composerRef.current?.focus();
+    }catch(error){
+      setMessages(old=>[...old,{id:Date.now()+1,role:"assistant",content:error instanceof Error?error.message:"A new chat could not be created."}]);
+    }finally{setBusy(false);}
+  }
+
   const providers=health?.providers??[];
   const ready=health?.aiReady===true;
   const isChat=active==="AI General Manager";
 
-  return <main className="app-shell">
+  return <main className={`app-shell ${isChat?"chat-mode":""} ${sidebarOpen?"":"sidebar-collapsed"}`}>
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">S</div><div><b>samzy<span>technology</span></b><small>BUSINESS COMMAND CENTRE</small></div></div>
       <div className="nav-label">COMPANY WORKSPACE</div>
@@ -483,7 +505,7 @@ export default function Home() {
       <div className="sidebar-bottom"><div className="secure-note"><span>⌑</span><div><b>Company-first security</b><small>Private workspace · Approval-led</small></div></div><div className="company-user"><div className="avatar">ST</div><div><b>Samzy Technology Limited</b><small>Company workspace</small></div></div></div>
     </aside>
     <section className="main">
-      <header className="topbar"><div className="crumb">Samzy Technology Limited <span>/</span> <b>{active}</b></div><div className="top-actions"><span className={ready?"health good":"health"}><i/>{ready?"AI SYSTEM READY":"SETUP IN PROGRESS"}</span>{token?<button className="signout-button" onClick={()=>void signOut()}>Sign out</button>:null}<span className="avatar small">ST</span></div></header>
+      <header className="topbar"><button className="menu-toggle" type="button" aria-label={sidebarOpen?"Hide navigation":"Show navigation"} onClick={()=>setSidebarOpen(value=>!value)}>☰</button><div className="crumb">Samzy Technology Limited <span>/</span> <b>{active}</b></div><div className="top-actions"><span className={ready?"health good":"health"}><i/>{ready?"AI SYSTEM READY":"SETUP IN PROGRESS"}</span>{token?<button className="signout-button" onClick={()=>void signOut()}>Sign out</button>:null}<span className="avatar small">ST</span></div></header>
       <div className="content">
         <section className="welcome"><div><div className="eyebrow">COMPANY OPERATIONS · COMMAND CENTRE</div><h1>{isChat?"Your AI General Manager.":"Good morning. Let's build."}</h1><p>{isChat?"Analyses live CRM, client, project, finance, approval and recorded outreach data alongside approved company memory. External actions remain approval-gated.":"Your business at a glance. Intelligence, operations and execution in one place."}</p></div><button className="primary" onClick={()=>setActive("AI General Manager")}>✳ &nbsp;Talk to AI Manager</button></section>
         {active==="Overview"?<>
@@ -496,7 +518,7 @@ export default function Home() {
             ].map(([label,value,sub,icon,color])=><article className="metric" key={label}><div className="metric-head"><span>{label}</span><i className={`metric-icon ${color}`}>{icon}</i></div><strong>{value}</strong><small>{sub}</small></article>)}
           </section>
           <section className="dashboard-grid">
-            <article className="panel intelligence"><div className="panel-head"><div><div className="eyebrow">CENTRAL INTELLIGENCE</div><h2>AI collaboration layer</h2></div><span className={ready?"chip good":"chip"}>{providers.filter(p=>p.configured).length}/3 models connected</span></div><p className="muted">Three coordinated AI providers working toward one company objective, with shared approved memory and a single synthesis.</p><div className="provider-list">{["A","B","C"].map(slot=>{const p=providers.find(x=>x.slot===slot);return <div className="provider" key={slot}><span className="provider-letter">{slot}</span><div><b>Model {slot} · {p?.provider??"Provider pending"}</b><small>{p?.model??"Configure provider and model credentials"}</small></div><em className={p?.configured?"connected":""}>{p?.configured?"Connected":"Not connected"}</em></div>})}</div><button className="inline-action" onClick={()=>setActive("AI General Manager")}>Open AI General Manager ↗</button></article>
+            <article className="panel intelligence"><div className="panel-head"><div><div className="eyebrow">CENTRAL INTELLIGENCE</div><h2>AI collaboration layer</h2></div><span className={ready?"chip good":"chip"}>{providers.filter(p=>p.configured).length}/5 models connected</span></div><p className="muted">Five coordinated AI providers working toward one company objective, with shared approved memory and a single synthesis.</p><div className="provider-list">{["A","B","C","D","E"].map(slot=>{const p=providers.find(x=>x.slot===slot);return <div className="provider" key={slot}><span className="provider-letter">{slot}</span><div><b>Model {slot} · {p?.provider??"Provider pending"}</b><small>{p?.model??"Configure provider and model credentials"}</small></div><em className={p?.configured?"connected":""}>{p?.configured?"Connected":"Not connected"}</em></div>})}</div><button className="inline-action" onClick={()=>setActive("AI General Manager")}>Open AI General Manager ↗</button></article>
             <article className="panel quick"><div className="eyebrow">MOVE THE BUSINESS FORWARD</div><h2>Quick commands</h2>{[
               ["⌕","Research new prospects","Find and qualify Nigerian businesses","Research new Nigerian businesses that could need our services. Do not contact anyone.","prospect_discovery"],
               ["▣","Review company projects","Progress, blockers and next steps","Give me a summary of active projects, blockers and next steps.","business_advice"],
@@ -506,9 +528,8 @@ export default function Home() {
           </section>
           <section className="lower-grid"><article className="panel"><div className="eyebrow">COMPANY PULSE</div><h2>Operations overview</h2>{workspace?<><div className="pulse-stat"><span>Pending approvals</span><b>{workspace.summary?.pendingApprovals??0}</b><button onClick={()=>setActive("Approvals")}>Review ↗</button></div><div className="pulse-stat"><span>Net recorded finance</span><b>{naira(workspace.summary?.netNgn??0)}</b><button onClick={()=>setActive("Finance")}>Open ledger ↗</button></div><div className="pulse-stat"><span>Active projects</span><b>{workspace.summary?.activeProjects??0}</b><button onClick={()=>setActive("Projects")}>View projects ↗</button></div></>:<div className="empty"><span>⌁</span><b>Connect the company workspace</b><p>Verified company activity and financial totals will appear here after secure sign-in.</p></div>}</article><article className="panel"><div className="eyebrow">CONNECTED ECOSYSTEM</div><h2>Registered products</h2>{(workspace?.products??[]).slice(0,4).map(item=><div className="product" key={item.id}><span>{item.product_name.slice(0,2).toUpperCase()}</span><div><b>{item.product_name}</b><small>{item.integration_mode} · {item.dashboard_url??"No dashboard URL"}</small></div><em>{item.health_status}</em></div>)}{!workspace?.products?.length?<div className="empty"><b>No registered products yet</b><p>Register independent Samzy products in Product Registry.</p></div>:null}<button className="inline-action" onClick={()=>setActive("Product Registry")}>Open Product Registry ↗</button></article></section>
         </>:active==="AI General Manager"?<section className="chat-panel">
-          <div className="chat-title"><div><div className="eyebrow">THE COMPANY'S INTELLIGENCE PARTNER</div><h2>Talk to your AI General Manager</h2><p>Ask questions, give instructions, plan and analyse company operations.</p></div><span className="chip">⌑ Private company workspace</span></div>
+          <div className="chat-title"><div className="chat-title-copy"><div className="eyebrow">THE COMPANY'S INTELLIGENCE PARTNER</div><h2>AI General Manager</h2><p>Samzy Technology · Private company workspace</p></div><div className="chat-title-actions"><button className="chat-menu-button" type="button" onClick={()=>setSidebarOpen(value=>!value)} aria-label="Toggle navigation">☰ Menu</button><button className="new-chat-button" type="button" onClick={()=>void startNewChat()} disabled={busy}>＋ New chat</button></div></div>
           <div className="chat-body"><div className="messages" ref={messagesContainerRef}>{messages.map(m=><article className={m.role==="user"?"message mine":"message"} key={m.id}><span className="message-avatar">{m.role==="user"?"ST":"✳"}</span><div className="message-main"><div className="message-author">{m.role==="user"?(m.actorUserId&&currentUserId&&m.actorUserId===currentUserId?"You · Samzy Technology Limited":"Company team"):"AI General Manager"}</div><div className="message-bubble">{renderMessageContent(m.content)}</div><div className="message-actions"><button type="button" aria-label="Copy message" onClick={()=>void copyMessage(m.id,m.content)}>{copiedMessageId===m.id?"✓ Copied":"▢ Copy"}</button>{m.role==="user"?<button type="button" aria-label="Edit your message" onClick={()=>editMessage(m)}>✎ Edit</button>:null}</div></div></article>)}<div ref={messagesEndRef}/>{busy?<div className="working">The company intelligence team is working…</div>:null}</div><form className="composer" onSubmit={e=>{e.preventDefault();void send();}}>{editingMessageId!==null?<div className="editing-banner"><span>Editing your message · Sending will replace it and its later replies</span><button type="button" onClick={cancelMessageEdit}>Cancel</button></div>:null}<div className="composer-input-wrap"><textarea ref={composerRef} value={draft} onChange={e=>{setDraft(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=Math.min(e.currentTarget.scrollHeight,220)+"px";}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Message your AI General Manager…" rows={1} aria-label="Message your AI General Manager"/></div><div className="composer-footer"><small>{busy?"AI team is analysing your request…":"Enter to send · Shift + Enter for a new line"}</small><button className="primary" disabled={busy||!draft.trim()}>{busy?<><span className="send-spinner"/> Working…</>:editingMessageId!==null?"Update & send":"Send"} <span aria-hidden="true">↑</span></button></div></form></div>
-          <aside className="chat-side"><article className="connect"><h3>Secure session active</h3><p>Administrator access confirmed</p><small>Your company workspace is protected by Supabase authentication and organisation-scoped access.</small></article><article className="suggest"><h3>Try asking</h3>{starters.map(s=><button key={s} onClick={()=>void send(s)}>{s}<span>↗</span></button>)}</article></aside>
         </section>:<section className="panel module-workspace">
           <div className="module-heading"><div><div className="eyebrow">LIVE COMPANY WORKSPACE</div><h2>{active}</h2><p>Company records are loaded from your authenticated, organisation-scoped workspace.</p></div><div className="module-heading-actions">{active!=="Settings"?<button className="primary" type="button" onClick={()=>setOpenForm(openForm===active?null:active)}>＋ Add {active==="Leads & CRM"?"prospect":active==="Clients"?"client":active==="Projects"?"project":active==="Tasks"?"task":active==="Product Registry"?"product":active==="Sales & Outreach"?"outreach draft":active==="Approvals"?"approval / CRM action":"ledger entry"}</button>:null}<button className="inline-action" onClick={()=>setActive("AI General Manager")}>Discuss with AI Manager ↗</button></div></div>
           {workspaceError?<div className="module-alert">{workspaceError}</div>:null}
