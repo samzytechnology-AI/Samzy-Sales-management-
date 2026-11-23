@@ -438,7 +438,10 @@ export default function Home() {
         }
       })});
       const result=await response.json();
-      if(!response.ok)throw new Error(result.error??"The AI service could not complete the request.");
+      if(!response.ok){
+        const detail=Array.isArray(result.issues)?result.issues.map((issue:{field?:string;message?:string})=>(issue.field?issue.field+": ":"")+(issue.message??"Invalid value")).join("; "):"";
+        throw new Error([result.error??"The AI service could not complete the request.",detail].filter(Boolean).join(" "));
+      }
       if(result.conversationId)setConversationId(result.conversationId);
       const allWarnings=[...(result.warnings??[]),...(researchWarning?[researchWarning]:[])];
       const answer=[result.synthesis,allWarnings.length?"\n\nNotes: "+allWarnings.join("; "):""].join("");
