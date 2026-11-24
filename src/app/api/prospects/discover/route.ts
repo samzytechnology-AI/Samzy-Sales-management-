@@ -314,9 +314,12 @@ export async function POST(request: NextRequest) {
     for (const candidate of candidates) {
       const officialSiteEvidence = uniqueEvidence.find(item => {
         if (isProfileUrl(item.url)) return false;
-        const bits = candidateKey(candidate.companyName).split(" ").filter(bit => bit.length > 3);
-        const titleHost = normalizedName((item.title ?? "") + " " + hostOf(item.url).replace(/\./g, " "));
-        return bits.length > 0 && bits.some(bit => titleHost.includes(bit));
+        const host = hostOf(item.url);
+        if (!host || /(^|\.)(facebook|instagram|linkedin|tiktok|twitter|youtube|x)\./i.test(host) || host.endsWith("google.com")) return false;
+        const hostLabel = host.split(".")[0] ?? "";
+        const generic = new Set(["the","and","for","of","school","schools","academy","college","university","hospital","clinic","hotel","restaurant","shop","store","services","group","limited","ltd","plc","company"]);
+        const bits = candidateKey(candidate.companyName).split(" ").filter(bit => bit.length >= 3 && !generic.has(bit));
+        return bits.length > 0 && bits.some(bit => hostLabel.includes(bit));
       });
       if (officialSiteEvidence || !candidate.profileUrl) { weak++; continue; }
 
