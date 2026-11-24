@@ -47,15 +47,21 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
 const OTHER_COUNTRIES = ["Argentina","India","Kenya","Philippines","Brazil","Mexico","Spain","France","Germany","Italy","Japan","China","Indonesia","Malaysia","Singapore","New Zealand","Ireland","Ghana","Egypt","Turkey","Saudi Arabia","Pakistan","Bangladesh","Sri Lanka","Nepal","Netherlands","Belgium","Switzerland","Sweden","Norway","Denmark","Poland","Portugal","Russia","Ukraine","South Korea","Thailand","Vietnam","Chile","Colombia","Peru","Morocco","Ethiopia","Uganda","Tanzania","Rwanda","Zambia","Zimbabwe","Botswana","Namibia","Senegal","Cameroon","Ivory Coast","Algeria","Tunisia","Qatar","Kuwait","Bahrain","Oman","Israel","Lebanon","Jordan","Iraq","Iran","Afghanistan","Myanmar","Cambodia","Laos","Mongolia","Taiwan","Hong Kong","Fiji","Dominican Republic","Costa Rica","Panama","Guatemala","Honduras","El Salvador","Nicaragua","Bolivia","Paraguay","Uruguay","Ecuador","Venezuela","Cuba","Haiti","Trinidad and Tobago","Bahamas","Belize","Guyana","Suriname","Iceland","Luxembourg","Austria","Czech Republic","Slovakia","Hungary","Romania","Bulgaria","Greece","Croatia","Serbia","Albania","North Macedonia","Montenegro","Estonia","Latvia","Lithuania","Finland","Mozambique","Malawi","Lesotho","Madagascar","Mauritius","Liberia","Sierra Leone","Togo","Benin","Burkina Faso","Niger","Mali","Chad","Gabon","Angola","Somalia","Sudan","South Sudan","Libya","Yemen","Syria","Armenia","Georgia","Azerbaijan","Kazakhstan","Uzbekistan","Kyrgyzstan","Tajikistan","Turkmenistan","Brunei","Timor-Leste","Papua New Guinea"];
 function evidenceMatchesCountry(item: Evidence, targetCountry: string): boolean {
   const normalize = (value: string) => " " + value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + " ";
-  const text = normalize([item.title ?? "", item.excerpt ?? "", item.url ?? ""].join(" "));
+  const title = normalize(item.title ?? "");
+  const excerpt = normalize(item.excerpt ?? "");
+  const url = normalize(item.url ?? "");
+  const titleCore = (item.title ?? "").split(/\s*(?:-|–|—|\|)\s*/)[0].split(",")[0];
+  const businessName = normalize(titleCore);
   const targetAliases = (COUNTRY_ALIASES[targetCountry] ?? [targetCountry]).map(value => normalize(value));
   const terms = [...OTHER_COUNTRIES, ...Object.values(COUNTRY_ALIASES).flat()];
   return !terms.some(term => {
     const normalized = normalize(term);
-    return !targetAliases.includes(normalized) && text.includes(normalized);
+    if (targetAliases.includes(normalized)) return false;
+    if (targetCountry === "United States" && normalized === " georgia ") return false;
+    if (businessName.includes(normalized)) return false;
+    return url.includes(normalized) || excerpt.includes(" in" + normalized) || excerpt.includes("," + normalized) || title.includes("," + normalized) || title.includes(" in" + normalized);
   });
 }
-
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status, headers: noStore });
 }
