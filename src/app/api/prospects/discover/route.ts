@@ -144,7 +144,7 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
     : "Public business/profile result found while researching " + profile.sector + " in " + profile.country + ". No official website was surfaced in this search batch; manually check before outreach.";
   return {
     companyName: cleanName, country: profile.country, industry: profile.sector, service,
-    fitScore: fit, summary, evidence, profileUrl: profile.url,
+    fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url,
     whatsapp: contact.whatsapp, phone: contact.phone, email: extractEmail(evidence),
   };
 }
@@ -291,11 +291,11 @@ export async function POST(request: NextRequest) {
       }
       saved.push(prospect);
 
-      await db.from("contact_points").upsert({
+      await db.from("contact_points").insert({
         organization_id:organizationId,prospect_id:prospect.id,channel:"other",
         address:candidate.profileUrl,is_verified:false,
         consent_basis:"Public business profile found in cited web search; verify business identity before outreach.",
-      },{onConflict:"organization_id,channel,address",ignoreDuplicates:true});
+      });
       if (candidate.whatsapp) {
         await db.from("contact_points").upsert({
           organization_id:organizationId,prospect_id:prospect.id,channel:"whatsapp",
