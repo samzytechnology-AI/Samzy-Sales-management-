@@ -27,7 +27,8 @@ export async function searchBusinessWeb(
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       api_key: apiKey,
-      query: trimmed,\n      ...(country ? { country } : {}),
+      query: trimmed,
+      ...(country ? { country } : {}),
       search_depth: "advanced",
       topic: "general",
       max_results: 10,
@@ -51,5 +52,5 @@ export async function searchBusinessWeb(
         ...(item.published_date ? { publishedAt: item.published_date.slice(0, 80) } : {}),
       }];
     } catch { return []; }
-  }).slice(0, 8);
+  }).slice(0, 10);
 }
