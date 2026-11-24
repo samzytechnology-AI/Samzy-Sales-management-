@@ -137,12 +137,24 @@ function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
   const exact = new Set(urls.filter((url): url is string => typeof url === "string"));
   return all.filter(item => exact.has(item.url)).slice(0, 6);
 }
+function nameMatchesEvidence(name: string, item: Evidence): boolean {
+  const normalize = (value: string) => value.toLowerCase().normalize("NFKD")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  const clean = normalize(name);
+  const title = normalize(item.title ?? "");
+  if (!clean || !title) return false;
+  if (title.includes(clean)) return true;
+  const ignored = new Set(["the","limited","ltd","plc","inc","incorporated","company","co","group","google","maps","profile"]);
+  const tokens = clean.split(" ").filter(token => token.length > 1 && !ignored.has(token));
+  return tokens.length > 0 && tokens.every(token => title.includes(token));
+}
+
 function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<string, unknown>): Candidate | null {
   const cleanName = companyName.trim().replace(/\s+/g, " ").slice(0, 160);
   if (cleanName.length < 3 || isNoiseTitle(cleanName) || !evidence.length) return null;
   const orderedEvidence = [...evidence].sort((a,b) => Number(isProfileUrl(b.url)) - Number(isProfileUrl(a.url)));
   const profile = orderedEvidence.find(item => isProfileUrl(item.url));
-  if (!profile || !orderedEvidence.some(hasActivityEvidence)) return null;
+  if (!profile || !hasActivityEvidence(profile) || !nameMatchesEvidence(cleanName, profile)) return null;
   const contact = extractPhone(orderedEvidence);
   const fit = typeof extra?.fitScore === "number" && Number.isFinite(extra.fitScore)
     ? Math.max(0, Math.min(100, Math.round(extra.fitScore))) : null;
