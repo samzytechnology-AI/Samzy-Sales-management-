@@ -159,19 +159,33 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
 
 export async function POST(request: NextRequest) {
   const authorization = request.headers.get("authorization") ?? "";
-  const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  const bearer = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  const cronSecret = process.env.CRON_SECRET ?? "";
+  const isCron = Boolean(cronSecret && bearer && bearer === cronSecret);
+  const token = isCron ? "" : bearer;
   const organizationId = request.headers.get("x-organization-id") ?? "";
-  if (!token) return jsonError("A valid sign-in session is required.", 401);
+  if (!isCron && !token) return jsonError("A valid sign-in session is required.", 401);
   if (!uuid.safeParse(organizationId).success) return jsonError("A valid organisation ID is required.", 400);
 
+  let lockClaimed = false;
   try {
     const db = createServerSupabaseClient();
-    const { data: authData, error: authError } = await db.auth.getUser(token);
-    if (authError || !authData.user) return jsonError("Your sign-in session is invalid or expired.", 401);
-    const { data: member, error: memberError } = await db.from("organization_members")
-      .select("role").eq("organization_id", organizationId).eq("user_id", authData.user.id).maybeSingle();
-    if (memberError) throw new Error("Could not verify company membership.");
-    if (!member || !["owner", "admin", "manager"].includes(member.role)) return jsonError("You cannot discover prospects for this workspace.", 403);
+    let actorUserId: string | null = null;
+    if (isCron) {
+      const { data: owner, error: ownerError } = await db.from("organization_members")
+        .select("user_id").eq("organization_id", organizationId).in("role", ["owner", "admin"])
+        .order("created_at", { ascending: true }).limit(1).maybeSingle();
+      if (ownerError || !owner) return jsonError("No authorised company owner is available for scheduled prospect discovery.", 403);
+      actorUserId = owner.user_id;
+    } else {
+      const { data: authData, error: authError } = await db.auth.getUser(token);
+      if (authError || !authData.user) return jsonError("Your sign-in session is invalid or expired.", 401);
+      const { data: member, error: memberError } = await db.from("organization_members")
+        .select("role").eq("organization_id", organizationId).eq("user_id", authData.user.id).maybeSingle();
+      if (memberError) throw new Error("Could not verify company membership.");
+      if (!member || !["owner", "admin", "manager"].includes(member.role)) return jsonError("You cannot discover prospects for this workspace.", 403);
+      actorUserId = authData.user.id;
+    }
 
     const tavilyKey = process.env.TAVILY_API_KEY ?? "";
     if (!tavilyKey) return jsonError("Tavily is not configured on the server. No prospects were saved.", 503);
