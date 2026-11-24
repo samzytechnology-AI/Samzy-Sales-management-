@@ -61,7 +61,7 @@ function isProfileUrl(url: string): boolean {
   return PROFILE_HOSTS.some(domain => host === domain || host.endsWith("." + domain));
 }
 function isNoiseTitle(value: string): boolean {
-  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies)$/i.test(value.trim())
+  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|facebook|instagram|linkedin|tiktok|twitter|youtube|google maps|google|yelp)$/i.test(value.trim())
     || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses)\b/i.test(value);
 }
 function nameFromTitle(title: string, url: string): string {
@@ -140,12 +140,12 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
   const contact = extractPhone(orderedEvidence);
   const fit = typeof extra?.fitScore === "number" && Number.isFinite(extra.fitScore)
     ? Math.max(0, Math.min(100, Math.round(extra.fitScore))) : null;
-  const service = typeof extra?.matchedService === "string" ? extra.matchedService.slice(0, 160) : profile.service;
+  const matchedCatalogService = typeof extra?.matchedService === "string"\n    ? SAMZY_SERVICE_CATALOG.find(item => normalizedName(item.name) === normalizedName(extra.matchedService as string))\n    : undefined;\n  const service = matchedCatalogService?.name ?? profile.service;\n  const readiness = matchedCatalogService?.readiness ?? profile.serviceReadiness;
   const summary = typeof extra?.researchSummary === "string" ? extra.researchSummary.slice(0, 1000)
     : "Public business/profile result found while researching " + profile.sector + " in " + profile.country + ". No official website was surfaced in this search batch; manually check before outreach.";
   return {
     companyName: cleanName, country: profile.country, industry: profile.sector, service,
-    fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url, readiness:profile.serviceReadiness,
+    fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url, readiness,
     whatsapp: contact.whatsapp, phone: contact.phone, email: extractEmail(orderedEvidence),
   };
 }
