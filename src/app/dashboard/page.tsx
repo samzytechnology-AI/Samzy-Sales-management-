@@ -162,6 +162,26 @@ export default function Home() {
   },[token,orgId,active]);
 
   useEffect(()=>{
+    if(active!=="Leads & CRM"||!token||!orgId.trim())return;
+    const refresh=async()=>{
+      try{
+        const response=await fetch("/api/workspace?module=prospects",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
+        if(!response.ok)return;
+        const data=await response.json();
+        setWorkspace(previous=>{
+          if(!previous)return data;
+          const fresh=data.prospects??[];
+          const freshIds=new Set(fresh.map((item:any)=>item.id));
+          const older=(previous.prospects??[]).filter((item:any)=>!freshIds.has(item.id));
+          return {...data,prospects:[...fresh,...older],prospectsHasMore:Boolean(data.prospectsHasMore||older.length)};
+        });
+      }catch{/* background refresh is best-effort; the next interval retries */}
+    };
+    const timer=window.setInterval(()=>void refresh(),60_000);
+    return ()=>window.clearInterval(timer);
+  },[active,token,orgId]);
+
+  useEffect(()=>{
     if(active!=="Approvals"||!token||!orgId.trim())return;
     let cancelled=false;
     setActionsBusy(true);
@@ -585,7 +605,22 @@ export default function Home() {
           {token&&orgId.trim()&&!workspaceBusy?<>
             {active==="Leads & CRM"?<>
               {openForm===active && (<><form className="record-form" onSubmit={e=>void submitModuleForm(e,"prospect")}><h3>Add a prospect</h3><input name="company_name" placeholder="Company name" required/><input name="website_url" type="url" placeholder="Website URL (optional)"/><input name="industry" placeholder="Industry"/><input name="country" placeholder="Country"/><input name="fit_score" type="number" min="0" max="100" step="1" placeholder="Fit score (0–100)"/><textarea name="research_summary" placeholder="Research notes / evidence summary"/><button className="primary" disabled={saveBusy}>Save prospect</button><button type="button" className="inline-action" onClick={()=>setOpenForm(null)}>Cancel</button></form></>)}
-              <div className="record-list">{(workspace?.prospects??[]).map(item=><div className="record-row" key={item.id}><div><b>{item.company_name}</b><small>{item.industry??"Industry not recorded"} · {item.country??"Country unknown"} · {item.website_url??"No website"} · {item.fit_score==null?"Not scored":`Fit ${item.fit_score}/100`}</small></div><div className="status-editor"><span className="record-status">{item.status}</span><select aria-label={`Status for ${item.company_name}`} value={statusDrafts[item.id]??item.status} onChange={e=>setStatusDrafts(old=>({...old,[item.id]:e.target.value}))}><option value="discovered">Discovered</option><option value="researching">Researching</option><option value="qualified">Qualified</option><option value="contacted">Contacted</option><option value="replied">Replied</option><option value="opportunity">Opportunity</option><option value="disqualified">Disqualified</option></select><button disabled={saveBusy||!statusDrafts[item.id]||statusDrafts[item.id]===item.status} onClick={()=>void updateRecordStatus("prospect",item.id,statusDrafts[item.id])}>Save status</button><button disabled={busy} onClick={()=>{setActive("AI General Manager");void send("Research "+item.company_name+". Review its public website, business model, likely unmet needs and fit for Samzy Technology. Score it using the sales rubric, identify the best profitable offer, write a personalised first-contact message, forecast plausible replies and recommend the next response. Cite evidence and state unknowns.","company_research");}}>Build sales plan</button>{item.status!=="customer"?<button disabled={saveBusy} onClick={()=>void convertProspectToClient(item.id)}>Convert to client</button>:null}</div><div className="contact-points"><div className="prospect-quick-links">{item.website_url?<a href={item.website_url} target="_blank" rel="noreferrer">Website ↗</a>:<span>No official website found — verify manually</span>}{(workspace?.contactPoints??[]).filter(contact=>contact.prospect_id===item.id&&contact.channel==="whatsapp").map(contact=><a key={contact.id} href={`https://wa.me/${contact.address.replace(/\\D/g,"")}`} target="_blank" rel="noreferrer">WhatsApp ↗</a>)}{(item.evidence??[]).find((source:any)=>typeof source?.url==="string")?.url?<a href={(item.evidence??[]).find((source:any)=>typeof source?.url==="string").url} target="_blank" rel="noreferrer">View Profile ↗</a>:<span>Profile unavailable</span>}</div>{(workspace?.contactPoints??[]).filter(contact=>contact.prospect_id===item.id).map(contact=><div key={contact.id}><span>{contact.channel}: {contact.address} · {contact.is_verified?"Manually verified":"Unverified"} · {contact.consent_basis??"No contact source recorded"}</span>{!contact.is_verified&&contact.consent_basis?<form className="contact-form" onSubmit={e=>{e.preventDefault();void verifyContactPoint(contact.id);}}><input value={verificationNotes[contact.id]??""} onChange={e=>setVerificationNotes(old=>({...old,[contact.id]:e.target.value}))} placeholder="How was this contact verified?" aria-label={"Verification note for "+contact.address}/><button disabled={saveBusy}>Confirm verification</button></form>:null}</div>)}</div><form className="contact-form" onSubmit={e=>void submitModuleForm(e,"contact_point")}><input type="hidden" name="prospect_id" value={item.id}/><select name="channel" defaultValue="email" aria-label={`Contact channel for ${item.company_name}`}><option value="email">Email</option><option value="whatsapp">WhatsApp</option><option value="voice">Voice</option><option value="other">Other</option></select><input name="address" placeholder="Email address or phone number" required/><input name="consent_basis" placeholder="Contact source / consent basis (optional)"/><button disabled={saveBusy}>Add contact</button></form></div>)}{!workspace?.prospects?.length?<p className="empty">No prospect records yet.</p>:null}{workspace?.prospectsHasMore?<button className="inline-action" type="button" disabled={prospectsLoadingMore} onClick={()=>void loadMoreProspects()}>{prospectsLoadingMore?"Loading more prospects…":"Load more prospects"}</button>:null}</div>
+              <div className="prospect-list">{(workspace?.prospects??[]).map(item=>{
+                const profileUrl=(item.evidence??[]).find((source:any)=>typeof source?.url==="string")?.url as string|undefined;
+                const whatsapp=(workspace?.contactPoints??[]).find(contact=>contact.prospect_id===item.id&&contact.channel==="whatsapp");
+                const description=String(item.research_summary??item.industry??"").split("\n")[0].trim().slice(0,170);
+                return <article className="prospect-card" key={item.id}>
+                  <div className="prospect-thumbnail" aria-hidden="true">{String(item.company_name??"B").trim().charAt(0).toUpperCase()}</div>
+                  <div className="prospect-card-content">
+                    <b>{item.company_name}</b>
+                    <p>{description||"Business prospect"}</p>
+                    <div className="prospect-actions">
+                      {profileUrl?<a href={profileUrl} target="_blank" rel="noreferrer">View Profile ↗</a>:null}
+                      {whatsapp?<a className="prospect-whatsapp" href={`https://wa.me/${String(whatsapp.address).replace(/\\D/g,"")}`} target="_blank" rel="noreferrer">WhatsApp ↗</a>:null}
+                    </div>
+                  </div>
+                </article>;
+              })}{!workspace?.prospects?.length?<p className="empty">No qualified business prospects yet. Background discovery is running.</p>:null}{workspace?.prospectsHasMore?<button className="inline-action" type="button" disabled={prospectsLoadingMore} onClick={()=>void loadMoreProspects()}>{prospectsLoadingMore?"Loading more prospects…":"Load more prospects"}</button>:null}</div>
             </>:null}
             {active==="Clients"?<>
               {openForm===active && (<><form className="record-form" onSubmit={e=>void submitModuleForm(e,"client")}><h3>Add a client</h3><input name="company_name" placeholder="Company / client name" required/><input name="primary_contact_name" placeholder="Primary contact (optional)"/><input name="email" type="email" placeholder="Business email"/><input name="phone" placeholder="Phone"/><input name="website_url" type="url" placeholder="Website URL"/><input name="industry" placeholder="Industry"/><textarea name="notes" placeholder="Client notes"/><button className="primary" disabled={saveBusy}>Save client</button><button type="button" className="inline-action" onClick={()=>setOpenForm(null)}>Cancel</button></form></>)}
