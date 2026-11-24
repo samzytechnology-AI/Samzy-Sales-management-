@@ -134,9 +134,10 @@ function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
 function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<string, unknown>): Candidate | null {
   const cleanName = companyName.trim().replace(/\s+/g, " ").slice(0, 160);
   if (cleanName.length < 3 || isNoiseTitle(cleanName) || !evidence.length) return null;
-  const profile = evidence.find(item => isProfileUrl(item.url));
-  if (!profile || !evidence.some(hasActivityEvidence)) return null;
-  const contact = extractPhone(evidence);
+  const orderedEvidence = [...evidence].sort((a,b) => Number(isProfileUrl(b.url)) - Number(isProfileUrl(a.url)));
+  const profile = orderedEvidence.find(item => isProfileUrl(item.url));
+  if (!profile || !orderedEvidence.some(hasActivityEvidence)) return null;
+  const contact = extractPhone(orderedEvidence);
   const fit = typeof extra?.fitScore === "number" && Number.isFinite(extra.fitScore)
     ? Math.max(0, Math.min(100, Math.round(extra.fitScore))) : null;
   const service = typeof extra?.matchedService === "string" ? extra.matchedService.slice(0, 160) : profile.service;
@@ -145,7 +146,7 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
   return {
     companyName: cleanName, country: profile.country, industry: profile.sector, service,
     fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url,
-    whatsapp: contact.whatsapp, phone: contact.phone, email: extractEmail(evidence),
+    whatsapp: contact.whatsapp, phone: contact.phone, email: extractEmail(orderedEvidence),
   };
 }
 
@@ -297,24 +298,24 @@ export async function POST(request: NextRequest) {
         consent_basis:"Public business profile found in cited web search; verify business identity before outreach.",
       });
       if (candidate.whatsapp) {
-        await db.from("contact_points").upsert({
+        await db.from("contact_points").insert({
           organization_id:organizationId,prospect_id:prospect.id,channel:"whatsapp",
           address:candidate.whatsapp,is_verified:false,
           consent_basis:"Number appeared beside WhatsApp in cited public profile/search excerpt; verify before outreach.",
-        },{onConflict:"organization_id,channel,address",ignoreDuplicates:true});
+        });
       } else if (candidate.phone) {
-        await db.from("contact_points").upsert({
+        await db.from("contact_points").insert({
           organization_id:organizationId,prospect_id:prospect.id,channel:"voice",
           address:candidate.phone,is_verified:false,
           consent_basis:"Public phone candidate from cited search excerpt; verify before calling.",
-        },{onConflict:"organization_id,channel,address",ignoreDuplicates:true});
+        });
       }
       if (candidate.email) {
-        await db.from("contact_points").upsert({
+        await db.from("contact_points").insert({
           organization_id:organizationId,prospect_id:prospect.id,channel:"email",
           address:candidate.email,is_verified:false,
           consent_basis:"Public email candidate from cited search excerpt; verify before outreach.",
-        },{onConflict:"organization_id,channel,address",ignoreDuplicates:true});
+        });
       }
     }
 
