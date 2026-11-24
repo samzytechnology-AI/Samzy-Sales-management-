@@ -77,10 +77,7 @@ function parseJson(text: string): unknown {
 function hostOf(value: string): string {
   try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
-const PROFILE_HOSTS = [
-  "maps.google.com","yelp.com","yellowpages.com","tripadvisor.com","foursquare.com","index.ng","finelib.com","mynigeriabusiness.ng",
-  "hotfrog.com","businesslist.com","chamberofcommerce.com","kompass.com",
-];
+
 function isProfileUrl(url: string): boolean {
   const host = hostOf(url);
   try {
@@ -92,8 +89,8 @@ function isProfileUrl(url: string): boolean {
     if (host === "index.ng") return /^\/b\/[^/]+\/?$/.test(path);
     if (host === "finelib.com") return path.startsWith("/listing/") && path.split("/").filter(Boolean).length >= 2;
     if (host === "mynigeriabusiness.ng") return path.startsWith("/business-profile") && parsed.searchParams.has("nam");
-    if (host === "yelp.com") return path.startsWith("/biz/");
-    if (host === "yellowpages.com") return path.includes("/mip/");
+    if (host.startsWith("yelp.")) return path.startsWith("/biz/");
+    if (host.startsWith("yellowpages.")) return path.includes("/mip/");
     if (host.startsWith("tripadvisor.")) return /\/(restaurant|hotel|attraction)_review/.test(path);
     if (host === "foursquare.com") return path.startsWith("/v/");
     if (host === "hotfrog.com") return path.includes("/company/") || path.includes("/business/");
@@ -104,7 +101,7 @@ function isProfileUrl(url: string): boolean {
     if (host === "chamberofcommerce.com") return path.includes("/business-directory/") && path.split("/").filter(Boolean).length >= 3;
     if (host === "kompass.com") return path.includes("/c/") || path.includes("/company/");
   } catch { return false; }
-  return PROFILE_HOSTS.some(domain => host === domain || host.endsWith("." + domain));
+  return false;
 }
 function isNoiseTitle(value: string): boolean {
   return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google ads|google business profile|local guides|google maps local guides|share your world as a local guide|yellow pages|businesslist|tripadvisor|foursquare|hotfrog|kompass|chamber of commerce|finelib|index\.ng|mynigeriabusiness|google|yelp)$/i.test(value.trim())
