@@ -463,9 +463,10 @@ export default function Home() {
       const providerWarnings=(result.warnings??[]) as string[];
       const notes:string[]=[];
       const modelCount=Array.isArray(result.contributions)?result.contributions.length:0;
-      if(modelCount>0&&modelCount<5)notes.push(`Limited response: ${modelCount} of 5 AI models replied.`);
-      if(providerWarnings.some((warning:string)=>warning.startsWith("Synthesis pass failed")||warning.startsWith("Only one model responded")))notes.push("Cross-checking was unavailable for this reply.");
-      if(providerWarnings.some((warning:string)=>/credit|billing|quota|429|rate limit/i.test(warning)))notes.push("Some AI providers need credits or are temporarily rate-limited.");
+      if(modelCount>0&&providerWarnings.some((warning:string)=>warning.startsWith("Single-provider mode"))){
+        const activeProvider=String(result.contributions?.[0]?.provider??"available provider");
+        notes.push(`AI is active using ${activeProvider}. Multi-model cross-checking is paused to conserve quota; you can continue using the assistant.`);
+      }
       if(researchWarning)notes.push("Live web research was unavailable.");
       const answer=[result.synthesis,notes.length?"\n\n*AI status:* "+notes.join(" "):""].join("");
       setMessages(old=>[...old.map(message=>message.id===messageId?{...message,persistedId:result.userMessageId??message.persistedId}:message),{id:Date.now()+2,role:"assistant",content:answer||"The AI service returned no synthesis."}]);
