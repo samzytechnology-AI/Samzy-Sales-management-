@@ -107,7 +107,7 @@ function isProfileUrl(url: string): boolean {
   return PROFILE_HOSTS.some(domain => host === domain || host.endsWith("." + domain));
 }
 function isNoiseTitle(value: string): boolean {
-  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google ads|google business profile|local guides|google maps local guides|share your world as a local guide|yellow pages|businesslist|tripadvisor|foursquare|hotfrog|kompass|chamber of commerce|google|yelp)$/i.test(value.trim())
+  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google ads|google business profile|local guides|google maps local guides|share your world as a local guide|yellow pages|businesslist|tripadvisor|foursquare|hotfrog|kompass|chamber of commerce|finelib|index\.ng|mynigeriabusiness|google|yelp)$/i.test(value.trim())
     || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses|facebook group|community group|discussion thread|classifieds)\b/i.test(value);
 }
 function nameFromTitle(title: string, url: string): string {
