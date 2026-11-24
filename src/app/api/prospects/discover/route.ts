@@ -125,7 +125,7 @@ function taskAt(index: number) {
     : "locally recognised";
   const query = "Find named, real " + variation + " " + sector + " in " + country.name
     + " that may need " + searchTerm
-    + ". Search for Google Maps business listings first (site:google.com/maps/place), then reputable business-directory listings for individual establishments. Prefer businesses with no official standalone website. Exclude all social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. Return only individual operating businesses with a specific business listing and evidence such as address, hours, phone, reviews, or services. ";
+    + ". Search only for individual Google Maps place listings (site:google.com/maps/place). Prefer businesses with no official standalone website. Exclude all social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. Return only individual operating businesses with a specific business listing and evidence such as address, hours, phone, reviews, or services. ";
   return { country, sector, service, query: query.slice(0, 590), cycle };
 }
 function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
@@ -251,9 +251,9 @@ export async function POST(request: NextRequest) {
           "Act as a strict B2B business-verification analyst. Extract only real, named, operating establishments from the supplied web evidence.",
           "Return ONLY JSON: {\"prospects\":[{\"companyName\":\"...\",\"businessDescription\":\"one short factual sentence describing what this business does\",\"evidenceUrls\":[\"exact supplied URL\"],\"matchedService\":\"...\",\"fitScore\":0}]}",
           "Do not invent names, websites, phone numbers, emails, photos, or facts. Every prospect must be supported by an exact supplied URL.",
-          "A social-media page, Facebook group/post, Instagram profile, discussion, classified, or personal account is NEVER sufficient evidence and must NEVER be saved. Prioritise Google Maps individual business listings and credible directory pages for a specific named establishment. The evidence should indicate a real operating business through address, opening hours, phone, reviews, admissions, products, or services.",
+          "A social-media page, Facebook group/post, Instagram profile, discussion, classified, or personal account is NEVER sufficient evidence and must NEVER be saved. Accept only a specific, named Google Maps place listing for an individual establishment. The evidence should indicate a real operating business through address, opening hours, phone, reviews, admissions, products, or services.",
           "Exclude agencies selling web design, graphics, marketing, or software; job listings; news; generic directory/category pages; and businesses with an official standalone website shown in the evidence.",
-          "Do not require phone or email if a qualifying Google Maps or reputable directory business listing exists. Do not claim a business has no website; say no official website was surfaced and manual verification is still required.",
+          "Do not require phone or email if a qualifying Google Maps place listing exists. Do not claim a business has no website; say no official website was surfaced and manual verification is still required.",
           "Match the most relevant Samzy service. Expansion services must remain marked as requiring capability confirmation. Return up to 20 distinct businesses."
         ].join(" "),
         context: {
