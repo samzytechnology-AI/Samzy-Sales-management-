@@ -149,3 +149,17 @@
  .app-shell.chat-mode .composer-footer{flex-direction:row;align-items:center}
  .app-shell.chat-mode .composer-footer .primary{width:auto}
 }
+
+/* Compact business prospect cards */
+.prospect-list{display:grid;gap:0;margin-top:8px}
+.prospect-card{display:flex;align-items:center;gap:13px;padding:13px 4px;border-bottom:1px solid var(--line);min-width:0}
+.prospect-thumbnail{width:54px;height:54px;flex:0 0 54px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(145deg,#1d4266,#173a4b);border:1px solid #355879;color:#b8dcff;font:800 22px Manrope;letter-spacing:-1px}
+.prospect-card-content{min-width:0;flex:1;display:grid;gap:5px}
+.prospect-card-content>b{font:700 13px Manrope;color:#eff6ff;overflow-wrap:anywhere}
+.prospect-card-content>p{margin:0;color:#91a7c1;font-size:10px;line-height:1.45;overflow-wrap:anywhere}
+.prospect-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:3px}
+.prospect-actions a{display:inline-flex;align-items:center;border:1px solid #35516f;background:#142a40;color:#a9d0ff;text-decoration:none;border-radius:7px;padding:6px 10px;font-size:9px;font-weight:700}
+.prospect-actions a:hover{border-color:#76b6ff;color:#fff}
+.prospect-actions a.prospect-whatsapp{border-color:#27634e;background:#102d27;color:#86e2b9}
+.prospect-list>.inline-action{justify-self:start}
+@media(max-width:600px){.prospect-card{gap:10px;padding:12px 1px}.prospect-thumbnail{width:46px;height:46px;flex-basis:46px;border-radius:10px;font-size:19px}.prospect-card-content>b{font-size:12px}.prospect-card-content>p{font-size:9px}.prospect-actions{gap:6px}.prospect-actions a{padding:6px 8px;font-size:9px}}
