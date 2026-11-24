@@ -27,10 +27,10 @@ export async function searchBusinessWeb(
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       api_key: apiKey,
-      query: country ? `${trimmed} ${country}` : trimmed,
-      search_depth: "basic",
+      query: trimmed,\n      ...(country ? { country } : {}),
+      search_depth: "advanced",
       topic: "general",
-      max_results: 8,
+      max_results: 10,
       include_answer: false,
       include_raw_content: false,
     }),
