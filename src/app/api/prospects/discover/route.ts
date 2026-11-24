@@ -414,7 +414,7 @@ export async function POST(request: NextRequest) {
     const candidates = Array.from(new Map(combined.map(item => [candidateKey(item.companyName), item])).values()).slice(0, 24);
 
     const websiteCheckGroups: Candidate[][] = [];
-    for (let i = 0; i < candidates.length; i += 8) websiteCheckGroups.push(candidates.slice(i, i + 8));
+    for (let i = 0; i < candidates.length; i += 6) websiteCheckGroups.push(candidates.slice(i, i + 6));
     const websiteChecks = await Promise.all(websiteCheckGroups.map(async group => {
       const names = group.map(candidate => '"' + candidate.companyName.slice(0, 50) + '"').join("; ");
       const query = "Find the official standalone websites owned by these businesses in " + group[0].country + ": " + names + ". Return official business-owned websites only. Exclude directories, social profiles, Google Maps, review pages, news articles, and third-party listings.";
