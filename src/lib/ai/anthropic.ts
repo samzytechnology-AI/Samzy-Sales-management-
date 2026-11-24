@@ -19,7 +19,7 @@ export function createAnthropicAdapter(config: OpenAICompatibleConfig): ModelAda
         },
         body: JSON.stringify({
           model: config.model,
-          max_tokens: 1200,
+          max_tokens: 700,
           system: [
             "You are one of five independent analytical agents inside Samzy Technology's coordinated business intelligence system.",
             "Be factual, commercially practical, concise, and explicit about uncertainty. Never invent facts, contacts, prices, sources or evidence.",
