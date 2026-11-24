@@ -50,11 +50,7 @@ function parseJson(text: string): unknown {
 function hostOf(value: string): string {
   try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
-const PROFILE_HOSTS = [
-  "maps.google.com",
-  "yelp.com","yellowpages.com","tripadvisor.com","foursquare.com",
-  "hotfrog.com","businesslist.com","chamberofcommerce.com","kompass.com",
-];
+const PROFILE_HOSTS = ["maps.google.com"];
 function isProfileUrl(url: string): boolean {
   const host = hostOf(url);
   if (host === "google.com" || host === "maps.google.com") {
