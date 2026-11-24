@@ -37,6 +37,12 @@ function normaliseWebsite(value: unknown): string | null {
     return url.toString();
   } catch { return null; }
 }
+function emailFromEvidence(value: unknown, evidence: Array<{url:string;title?:string;excerpt?:string}>) {
+  if (typeof value !== "string") return null;
+  const email = value.trim().toLowerCase();
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return null;
+  return evidence.some(item => (item.excerpt ?? "").toLowerCase().includes(email)) ? email : null;
+}
 function phoneFromEvidence(value: unknown, evidence: Array<{url:string;title?:string;excerpt?:string}>) {
   if (typeof value !== "string") return null;
   const digits = value.replace(/\D/g, "");
@@ -69,9 +75,9 @@ export async function POST(request: NextRequest) {
     if (limitError) throw new Error("Could not enforce the discovery usage limit.");
     if (!allowed) return jsonError("The shared research limit has been reached. Try again later.", 429);
 
-    const serviceNames = ACTIVE_SAMZY_SERVICES.map(service => service.name).join(", ");
+    const serviceNames = "business websites, e-commerce, custom web applications, Android apps, school and hospital management systems, graphic design, AI automation, cybersecurity";
     const searchResults = await Promise.all(countries.map(async country => {
-      const query = `Find real, currently operating small and medium businesses in ${country.name} that may need one of these services: ${serviceNames}. Prioritise businesses with no official website or a broken/outdated website, active social profiles, and publicly listed official contact details. Return business websites and credible business profile sources, not agencies selling these services.`;
+      const query = `Find currently operating SMEs in ${country.name} in real estate, education, professional services, technology, consulting, retail, hospitality and growing local businesses that may need ${serviceNames}. Only return businesses with NO active official website (or a clearly broken website), recent business activity, and a publicly listed contact route such as WhatsApp or business email. Exclude businesses with an adequate active website and agencies selling these services. Include credible official social/business profile sources.`;
       try { return { country, evidence: await searchBusinessWeb(query.slice(0, 590), tavilyKey, country.code) }; }
       catch { return { country, evidence: [] }; }
     }));
@@ -86,9 +92,9 @@ export async function POST(request: NextRequest) {
         "Analyse the supplied live web search evidence and return ONLY a valid JSON array. Do not wrap it in markdown.",
         "Return at most 12 distinct real businesses. Use only evidence supplied. Do not invent names, websites, contact numbers, social accounts, operating status, or service problems.",
         "Prioritise businesses with no official website, or a broken/outdated website only when evidence proves it. If a search result is an agency, directory, job board, news article, inactive business, or unrelated page, exclude it.",
-        "For every business return keys: companyName, websiteUrl (official website URL or null), industry, country, fitScore (0-100, conservative), matchedService (one active service name), readiness (active or requires_confirmation), observedNeed (specific evidence-backed need; otherwise say unconfirmed), researchSummary (concise with evidence URLs), evidenceUrls (array of exact supplied URLs), officialWhatsapp (international digits-only phone only when the exact number is visibly present in a supplied excerpt; otherwise null).",
+        "For every business return keys: companyName, websiteUrl (official website URL or null), industry, country, fitScore (0-100, conservative), matchedService (one active service name), readiness (active or requires_confirmation), observedNeed (specific evidence-backed need; otherwise say unconfirmed), researchSummary (concise with evidence URLs), evidenceUrls (array of exact supplied URLs), officialWhatsapp (international digits-only phone only when the exact number is visibly present in a supplied excerpt; otherwise null), officialEmail (email address only when the exact address is visibly present in a supplied excerpt; otherwise null).",
         "Match only active Samzy services where possible. Expansion-only services must be marked requires_confirmation and never presented as an available offer.",
-        "A company must be currently operating or have recent credible activity. Do not infer a WhatsApp number. Do not claim website absent merely because search did not return one; mark websiteUrl null and say website status needs manual verification.",
+        "A company must be currently operating or have recent credible activity, have no active usable official website (or a clearly broken one), and have an explicit public contact route in the supplied evidence. Exclude companies with an adequate active official website. Do not infer a WhatsApp number or email. Do not claim website absent merely because search did not return one; say website status needs manual verification.",
         "Use only source URLs included below. No markdown, no commentary, no extra keys."
       ].join(" "),
       context: {
