@@ -31,7 +31,7 @@ const sectors = [
 type Evidence = WebEvidence & { country: string; sector: string; service: string; serviceReadiness: string; query: string };
 type Candidate = {
   companyName: string; country: string; industry: string; service: string;
-  fitScore: number | null; summary: string; evidence: Evidence[]; profileUrl: string; readiness: string;
+  fitScore: number | null; summary: string; evidence: Evidence[]; profileUrl: string; readiness: string; thumbnailUrl?: string | null;
   whatsapp: string | null; phone: string | null; email: string | null;
 };
 
@@ -131,6 +131,28 @@ function normalizedName(value: string): string {
 function candidateKey(value: string): string {
   return normalizedName(value).replace(/\b(limited|ltd|inc|llc|plc|company|co)\b/g, "").trim();
 }
+async function fetchProfileThumbnail(url: string): Promise<string | null> {
+  if (!isProfileUrl(url)) return null;
+  const host = hostOf(url);
+  if (host === "google.com" || host === "maps.google.com") return null;
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; SamzyProspectDiscovery/1.0)" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) return null;
+    const html = (await response.text()).slice(0, 400000);
+    const raw = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
+      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1]
+      ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)?.[1];
+    if (!raw) return null;
+    const imageUrl = new URL(raw, url);
+    return imageUrl.protocol === "http:" || imageUrl.protocol === "https:" ? imageUrl.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function hasExplicitWebsiteEvidence(item: Evidence): boolean {
   const text = item.excerpt ?? "";
   if (!/\bwebsite\s*(?:address|url|link)?\b/i.test(text)) return false;
@@ -373,6 +395,9 @@ export async function POST(request: NextRequest) {
     let duplicates = 0;
     let weak = 0;
     let failedSaves = 0;
+    const thumbnailUrls = await Promise.all(candidates.map(candidate => fetchProfileThumbnail(candidate.profileUrl)));
+    candidates.forEach((candidate, index) => { candidate.thumbnailUrl = thumbnailUrls[index] ?? null; });
+
     for (const candidate of candidates) {
       const officialSiteEvidence = uniqueEvidence.find(item => {
         if (isProfileUrl(item.url)) return false;
@@ -391,9 +416,10 @@ export async function POST(request: NextRequest) {
       if (existingError) { failedSaves++; continue; }
       if (existing) { duplicates++; continue; }
 
-      const evidenceRows = candidate.evidence.map(item => ({
+      const evidenceRows = candidate.evidence.map((item,index) => ({
         url:item.url,title:item.title,excerpt:item.excerpt?.slice(0,1200),
         publishedAt:item.publishedAt ?? null,sourceType:isProfileUrl(item.url)?"public_profile":"web_search",
+        ...(index===0 && candidate.thumbnailUrl ? {thumbnailUrl:candidate.thumbnailUrl} : {}),
       }));
       const researchSummary = candidate.summary.slice(0, 220) || candidate.industry.slice(0, 140);
       const { data: prospect, error: insertError } = await db.from("prospects").insert({
