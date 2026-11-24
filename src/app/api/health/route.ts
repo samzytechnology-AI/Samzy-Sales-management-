@@ -13,7 +13,8 @@ export async function GET() {
   return NextResponse.json({
     status: "foundation",
     providers: providers.map(({ slot, provider, model, configured }) => ({ slot, provider: provider || null, model: model || null, configured })),
-    aiReady: configuredCount === 5,
+    aiReady: configuredCount > 0,
+    configuredProviderCount: configuredCount,
     supabaseConfigured,
     researchReady,
     emailOutreachReady,
