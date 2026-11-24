@@ -447,7 +447,7 @@ export default function Home() {
       const notes:string[]=[];
       const modelCount=Array.isArray(result.contributions)?result.contributions.length:0;
       if(modelCount>0&&modelCount<5)notes.push(`Limited response: ${modelCount} of 5 AI models replied.`);
-      if(providerWarnings.some((warning:string)=>warning.startsWith("Synthesis pass failed")))notes.push("Cross-checking was unavailable for this reply.");
+      if(providerWarnings.some((warning:string)=>warning.startsWith("Synthesis pass failed")||warning.startsWith("Only one model responded")))notes.push("Cross-checking was unavailable for this reply.");
       if(providerWarnings.some((warning:string)=>/credit|billing|quota|429|rate limit/i.test(warning)))notes.push("Some AI providers need credits or are temporarily rate-limited.");
       if(researchWarning)notes.push("Live web research was unavailable.");
       const answer=[result.synthesis,notes.length?"\n\n*AI status:* "+notes.join(" "):""].join("");
