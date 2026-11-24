@@ -255,7 +255,7 @@ export async function POST(request: NextRequest) {
     let weak = 0;
     let failedSaves = 0;
     for (const candidate of candidates) {
-      const officialSiteEvidence = candidate.evidence.find(item => {
+      const officialSiteEvidence = uniqueEvidence.find(item => {
         if (isProfileUrl(item.url)) return false;
         const bits = candidateKey(candidate.companyName).split(" ").filter(bit => bit.length > 3);
         const titleHost = normalizedName((item.title ?? "") + " " + hostOf(item.url).replace(/\./g, " "));
