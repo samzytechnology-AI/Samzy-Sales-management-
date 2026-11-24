@@ -51,7 +51,7 @@ function hostOf(value: string): string {
   try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
 const PROFILE_HOSTS = [
-  "maps.google.com","maps.app.goo.gl","business.google.com",
+  "maps.google.com","maps.app.goo.gl",
   "yelp.com","yellowpages.com","tripadvisor.com","foursquare.com",
   "hotfrog.com","businesslist.com","chamberofcommerce.com","kompass.com",
 ];
@@ -63,12 +63,12 @@ function isProfileUrl(url: string): boolean {
   return PROFILE_HOSTS.some(domain => host === domain || host.endsWith("." + domain));
 }
 function isNoiseTitle(value: string): boolean {
-  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google|yelp)$/i.test(value.trim())
+  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google ads|google business profile|google|yelp)$/i.test(value.trim())
     || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses|facebook group|community group|discussion thread|classifieds)\b/i.test(value);
 }
 function nameFromTitle(title: string, url: string): string {
   let name = title
-    .replace(/\s*(?:\||–|—|-)\s*(?:facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|tripadvisor|yelp).*$/i, "")
+    .replace(/\s*(?:\||–|—|-)\s*(?:facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|google ads|google business profile|tripadvisor|yelp).*$/i, "")
     .replace(/\s*(?:\||–|—|-)\s*(?:official website|official page|home page|homepage|contact us|about us).*$/i, "")
     .replace(/\s*·\s*\d+(?:\.\d+)?\s*\([^)]*\).*$/, "")
     .replace(/^\s*(?:home|welcome to)\s+/i, "").trim();
