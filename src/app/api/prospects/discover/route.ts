@@ -140,7 +140,9 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
   const contact = extractPhone(orderedEvidence);
   const fit = typeof extra?.fitScore === "number" && Number.isFinite(extra.fitScore)
     ? Math.max(0, Math.min(100, Math.round(extra.fitScore))) : null;
-  const matchedCatalogService = typeof extra?.matchedService === "string"\n    ? SAMZY_SERVICE_CATALOG.find(item => normalizedName(item.name) === normalizedName(extra.matchedService as string))\n    : undefined;\n  const service = matchedCatalogService?.name ?? profile.service;\n  const readiness = matchedCatalogService?.readiness ?? profile.serviceReadiness;
+  const matchedCatalogService = typeof extra?.matchedService === "string"
+    ? SAMZY_SERVICE_CATALOG.find(item => normalizedName(item.name) === normalizedName(extra.matchedService as string))
+    : undefined;\n  const service = matchedCatalogService?.name ?? profile.service;\n  const readiness = matchedCatalogService?.readiness ?? profile.serviceReadiness;
   const summary = typeof extra?.researchSummary === "string" ? extra.researchSummary.slice(0, 1000)
     : "Public business/profile result found while researching " + profile.sector + " in " + profile.country + ". No official website was surfaced in this search batch; manually check before outreach.";
   return {
