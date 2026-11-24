@@ -78,7 +78,7 @@ function hostOf(value: string): string {
   try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
 const PROFILE_HOSTS = [
-  "maps.google.com","yelp.com","yellowpages.com","tripadvisor.com","foursquare.com",
+  "maps.google.com","yelp.com","yellowpages.com","tripadvisor.com","foursquare.com","index.ng","finelib.com","mynigeriabusiness.ng",
   "hotfrog.com","businesslist.com","chamberofcommerce.com","kompass.com",
 ];
 function isProfileUrl(url: string): boolean {
@@ -89,9 +89,12 @@ function isProfileUrl(url: string): boolean {
     if (host === "google.com" || host === "maps.google.com") {
       return path.includes("/maps/place/") || (path.startsWith("/maps") && parsed.searchParams.has("cid"));
     }
+    if (host === "index.ng") return /^\/b\/[^/]+\/?$/.test(path);
+    if (host === "finelib.com") return path.startsWith("/listing/") && path.split("/").filter(Boolean).length >= 2;
+    if (host === "mynigeriabusiness.ng") return path.startsWith("/business-profile") && parsed.searchParams.has("nam");
     if (host === "yelp.com") return path.startsWith("/biz/");
     if (host === "yellowpages.com") return path.includes("/mip/");
-    if (host === "tripadvisor.com") return /\/(restaurant|hotel|attraction)_review/.test(path);
+    if (host.startsWith("tripadvisor.")) return /\/(restaurant|hotel|attraction)_review/.test(path);
     if (host === "foursquare.com") return path.startsWith("/v/");
     if (host === "hotfrog.com") return path.includes("/company/") || path.includes("/business/");
     if (host === "businesslist.com") {
@@ -110,7 +113,7 @@ function isNoiseTitle(value: string): boolean {
 function nameFromTitle(title: string, url: string): string {
   let name = hostOf(url) === "tripadvisor.com" ? title.split(",")[0].trim() : title;
   name = name
-    .replace(/\s*(?:\||–|—|-)\s*(?:restaurant reviews|hotel reviews|attraction reviews|reviews?|photos?|pictures?|facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|google ads|google business profile|tripadvisor|yellow pages|businesslist|foursquare|hotfrog|kompass|chamber of commerce|yelp).*$/i, "")
+    .replace(/\s*(?:\||–|—|-)\s*(?:restaurant reviews|hotel reviews|attraction reviews|reviews?|photos?|pictures?|facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|google ads|google business profile|tripadvisor|yellow pages|businesslist|foursquare|hotfrog|kompass|chamber of commerce|finelib|index\.ng|mynigeriabusiness|yelp).*$/i, "")
     .replace(/\s*(?:\||–|—|-)\s*(?:official website|official page|home page|homepage|contact us|about us).*$/i, "")
     .replace(/\s*·\s*\d+(?:\.\d+)?\s*\([^)]*\).*$/, "")
     .replace(/^\s*(?:home|welcome to)\s+/i, "").trim();
@@ -161,13 +164,23 @@ function taskAt(index: number) {
   const country = countries[countryIndex];
   const sector = sectors[sectorIndex];
   const service = services[serviceIndex];
-  const searchTerm = service.searchTerms.slice(0, 3).join(" or ");
-  const variation = cycle % 3 === 0 ? "currently operating"
-    : cycle % 3 === 1 ? "established independent"
-    : "locally recognised";
-  const query = "Find named, real " + variation + " " + sector + " in " + country.name
-    + " that may need " + searchTerm
-    + ". Research Google Maps business profiles and individual establishment listings on Yelp, Yellow Pages, TripAdvisor, Foursquare, Hotfrog, BusinessList, Chamber of Commerce, or Kompass. Prefer businesses with no official standalone website. Return specific business profile pages with the establishment name and evidence such as address, opening hours, phone, reviews, admissions, products, or services. Exclude social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. ";
+  const cycle = Math.floor(index / total);
+  const country = countries[countryIndex];
+  const sector = sectors[sectorIndex];
+  const service = services[serviceIndex];
+  const variations = [
+    "with a named physical location and opening hours",
+    "with a public business phone number and street address",
+    "with customer reviews and a current individual business profile",
+    "independent establishments with no official website shown",
+  ];
+  const variation = variations[index % variations.length];
+  const sourceGuide = country.name === "Nigeria"
+    ? "Search individual business profiles on index.ng (/b/), Finelib (/listing/), MyNigeriaBusiness (/business-profile), and Google Maps."
+    : "Search Google Maps place profiles, Yelp business profiles, Yellow Pages business listings, individual TripAdvisor restaurant or hotel profiles, Foursquare, Hotfrog, BusinessList, and Chamber of Commerce listings.";
+  const query = "Find named, real " + variation + " " + sector + " in " + country.name + ". "
+    + sourceGuide
+    + " We are looking for operating businesses in this sector as potential customers, not suppliers. Return individual business profile pages with a clear business name and evidence such as address, opening hours, phone, reviews, admissions, products, or services. Prefer businesses without an official standalone website. Exclude software vendors, app developers, web design or marketing agencies, directory operators, generic category pages, articles, how-to guides, job pages, social media pages, Facebook groups/posts, and Instagram profiles. ";
   return { country, sector, service, query: query.slice(0, 590), cycle };
 }
 function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
