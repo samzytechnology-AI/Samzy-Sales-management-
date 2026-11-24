@@ -89,6 +89,7 @@ function isProfileUrl(url: string): boolean {
     if (host === "index.ng") return /^\/b\/[^/]+\/?$/.test(path);
     if (host === "finelib.com") return path.startsWith("/listing/") && path.split("/").filter(Boolean).length >= 2;
     if (host === "mynigeriabusiness.ng") return path.startsWith("/business-profile") && parsed.searchParams.has("nam");
+    if (host === "businesslist.com.ng") return path.startsWith("/company/") && path.split("/").filter(Boolean).length >= 3;
     if (host.startsWith("yelp.")) return path.startsWith("/biz/");
     if (host.startsWith("yellowpages.")) return path.includes("/mip/");
     if (host.startsWith("tripadvisor.")) return /\/(restaurant|hotel|attraction)_review/.test(path);
@@ -108,7 +109,11 @@ function isNoiseTitle(value: string): boolean {
     || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses|facebook group|community group|discussion thread|classifieds)\b/i.test(value);
 }
 function nameFromTitle(title: string, url: string): string {
-  let name = hostOf(url) === "tripadvisor.com" ? title.split(",")[0].trim() : title;
+  const host = hostOf(url);
+  let name = host === "tripadvisor.com" ? title.split(",")[0].trim()
+    : host === "businesslist.com.ng" ? title.split(" - ")[0].trim()
+    : host === "mynigeriabusiness.ng" ? title.split("|")[0].replace(/\s+in\s+[^|]+$/i, "").trim()
+    : title;
   name = name
     .replace(/\s*(?:\||–|—|-)\s*(?:restaurant reviews|hotel reviews|attraction reviews|reviews?|photos?|pictures?|facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|google ads|google business profile|tripadvisor|yellow pages|businesslist|foursquare|hotfrog|kompass|chamber of commerce|finelib|index\.ng|mynigeriabusiness|yelp).*$/i, "")
     .replace(/\s*(?:\||–|—|-)\s*(?:official website|official page|home page|homepage|contact us|about us).*$/i, "")
@@ -168,9 +173,21 @@ function taskAt(index: number) {
     "independent establishments with no official website shown",
   ];
   const variation = variations[index % variations.length];
+  const nigeriaSources = [
+    "site:businesslist.com.ng/company individual business profiles",
+    "site:mynigeriabusiness.ng/business-profile individual business profiles",
+    "site:index.ng/b individual business profiles",
+    "site:finelib.com individual business listings",
+  ];
+  const internationalSources = [
+    "site:google.com/maps/place individual Google Maps place profiles",
+    "site:yelp.com/biz individual Yelp business profiles",
+    "site:yellowpages.com individual Yellow Pages business listings",
+    "site:tripadvisor.com/Restaurant_Review OR site:tripadvisor.com/Hotel_Review individual business profiles",
+  ];
   const sourceGuide = country.name === "Nigeria"
-    ? "Search individual business profiles on index.ng (/b/), Finelib (/listing/), MyNigeriaBusiness (/business-profile), and Google Maps."
-    : "Search Google Maps place profiles, Yelp business profiles, Yellow Pages business listings, individual TripAdvisor restaurant or hotel profiles, Foursquare, Hotfrog, BusinessList, and Chamber of Commerce listings.";
+    ? nigeriaSources[index % nigeriaSources.length]
+    : internationalSources[index % internationalSources.length];
   const query = "Find named, real " + variation + " " + sector + " in " + country.name + ". "
     + sourceGuide
     + " We are looking for operating businesses in this sector as potential customers, not suppliers. Return individual business profile pages with a clear business name and evidence such as address, opening hours, phone, reviews, admissions, products, or services. Prefer businesses without an official standalone website. Exclude software vendors, app developers, web design or marketing agencies, directory operators, generic category pages, articles, how-to guides, job pages, social media pages, Facebook groups/posts, and Instagram profiles. ";
