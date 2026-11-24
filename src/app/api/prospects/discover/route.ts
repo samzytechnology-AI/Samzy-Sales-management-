@@ -395,9 +395,6 @@ export async function POST(request: NextRequest) {
     let duplicates = 0;
     let weak = 0;
     let failedSaves = 0;
-    const thumbnailUrls = await Promise.all(candidates.map(candidate => fetchProfileThumbnail(candidate.profileUrl)));
-    candidates.forEach((candidate, index) => { candidate.thumbnailUrl = thumbnailUrls[index] ?? null; });
-
     for (const candidate of candidates) {
       const officialSiteEvidence = uniqueEvidence.find(item => {
         if (isProfileUrl(item.url)) return false;
@@ -416,6 +413,7 @@ export async function POST(request: NextRequest) {
       if (existingError) { failedSaves++; continue; }
       if (existing) { duplicates++; continue; }
 
+      candidate.thumbnailUrl = await fetchProfileThumbnail(candidate.profileUrl);
       const evidenceRows = candidate.evidence.map((item,index) => ({
         url:item.url,title:item.title,excerpt:item.excerpt?.slice(0,1200),
         publishedAt:item.publishedAt ?? null,sourceType:isProfileUrl(item.url)?"public_profile":"web_search",
