@@ -261,6 +261,25 @@ function nameMatchesEvidence(name: string, item: Evidence): boolean {
   return tokens.length > 0 && tokens.every(token => title.includes(token));
 }
 
+function descriptionFromEvidence(profile: Evidence): string | null {
+  const raw = (profile.excerpt ?? "").replace(/\s+/g, " ").trim();
+  const ignored = /\b(contact number|mobile phone|working hours|website address|email address|verified business|reviews?|questions? & answers?|resources|users|local knowledge|better market decisions|update your business details|business directory|view map|get directions|company name|address|phone number)\b/i;
+  const descriptive = /\b(provides|offers|speciali[sz]es|delivers|manufactures|supplies|operates|serves|we provide|we offer|providing|offering|is a|are a)\b/i;
+  const sentences = raw.split(/(?<=[.!?])\s+|\s*[|•]\s*/).map(value => value.trim());
+  const match = sentences.find(value => value.length >= 30 && value.length <= 220 && descriptive.test(value) && !ignored.test(value));
+  return match ? match.slice(0, 170) : null;
+}
+function isSamzyCompetitor(companyName: string, summary: string): boolean {
+  const text = (companyName + " " + summary).toLowerCase();
+  const competingOffers = [
+    "web design","web development","website design","website development","software development",
+    "software company","mobile app","app development","graphic design","branding agency",
+    "digital marketing","social media management","seo agency","marketing agency",
+    "advertising agency","cybersecurity company","it support","ai automation","automation agency",
+  ];
+  return competingOffers.some(term => text.includes(term));
+}
+
 function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<string, unknown>): Candidate | null {
   if (!evidence.length) return null;
   const orderedEvidence = [...evidence].sort((a,b) => Number(isProfileUrl(b.url)) - Number(isProfileUrl(a.url)));
@@ -279,13 +298,17 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
     : undefined;
   const service = matchedCatalogService?.name ?? profile.service;
   const readiness = matchedCatalogService?.readiness ?? profile.serviceReadiness;
-  const summary = typeof extra?.businessDescription === "string" ? extra.businessDescription.trim().slice(0, 220)
-    : typeof extra?.researchSummary === "string" ? extra.researchSummary.trim().slice(0, 220)
-    : profile.sector.replace(/\b(independent|local|and training centres|businesses)\b/gi, "").replace(/\s+/g, " ").trim().slice(0, 140);
+  let summary = typeof extra?.businessDescription === "string" ? extra.businessDescription.trim().slice(0, 220)
+    : typeof extra?.researchSummary === "string" ? extra.researchSummary.trim().slice(0, 220) : "";
+  const genericSummary = !summary || sectors.some(sector => normalizedName(sector) === normalizedName(summary));
+  if (genericSummary) summary = descriptionFromEvidence(profile) ?? "";
+  if (!summary || isSamzyCompetitor(cleanName, summary)) return null;
+  const email = extractEmail(orderedEvidence);
   return {
-    companyName: cleanName, country: profile.country, industry: profile.sector, service,
-    fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url, readiness,
-    whatsapp: contact.whatsapp, phone: contact.phone, email: extractEmail(orderedEvidence),
+    companyName: cleanName, country: profile.country,
+    industry: typeof extra?.industry === "string" ? extra.industry.trim().slice(0, 90) : profile.sector,
+    service, fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url, readiness,
+    whatsapp: contact.whatsapp, phone: contact.phone, email,
   };
 }
 
