@@ -139,7 +139,7 @@ function taskAt(index: number) {
     : "locally recognised";
   const query = "Find named, real " + variation + " " + sector + " in " + country.name
     + " that may need " + searchTerm
-    + ". Search Google Maps place listings first (site:google.com/maps/place), then individual business listings on Yelp, Yellow Pages, TripAdvisor, Foursquare, Hotfrog, BusinessList, Chamber of Commerce, or Kompass. Prefer businesses with no official standalone website. Exclude all social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. Return only individual operating businesses with a specific business listing and evidence such as address, hours, phone, reviews, or services. ";
+    + ". Research Google Maps business profiles and individual establishment listings on Yelp, Yellow Pages, TripAdvisor, Foursquare, Hotfrog, BusinessList, Chamber of Commerce, or Kompass. Prefer businesses with no official standalone website. Return specific business profile pages with the establishment name and evidence such as address, opening hours, phone, reviews, admissions, products, or services. Exclude social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. ";
   return { country, sector, service, query: query.slice(0, 590), cycle };
 }
 function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
