@@ -153,6 +153,28 @@ async function fetchProfileThumbnail(url: string): Promise<string | null> {
   }
 }
 
+const DIRECTORY_DOMAINS = [
+  "businesslist.com.ng","businesslist.com","mynigeriabusiness.ng","index.ng","finelib.com",
+  "yelp.com","yellowpages.com","tripadvisor.com","foursquare.com","hotfrog.com",
+  "chamberofcommerce.com","kompass.com","nigeriaprivateschools.com","schoolandcollegelistings.com",
+  "africabizinfo.com","nigeriabusinessweb.com","ngpage.com","tavily.com",
+];
+function isOfficialWebsiteResult(item: Evidence, candidate: Candidate): boolean {
+  const host = hostOf(item.url);
+  if (!host || isProfileUrl(item.url) || host.endsWith("google.com")) return false;
+  if (/(^|\.)(facebook|instagram|linkedin|tiktok|twitter|youtube|x)\./i.test(host)) return false;
+  if (DIRECTORY_DOMAINS.some(domain => host === domain || host.endsWith("." + domain))) return false;
+  const generic = new Set(["the","and","for","of","school","schools","academy","college","university","hospital","clinic","hotel","restaurant","shop","store","services","group","limited","ltd","plc","company"]);
+  const tokens = candidateKey(candidate.companyName).split(" ").filter(bit => bit.length >= 3 && !generic.has(bit));
+  if (!tokens.length) return false;
+  const hostLabel = host.split(".")[0] ?? "";
+  const domainMatch = tokens.some(token => hostLabel.includes(token));
+  const resultText = candidateKey((item.title ?? "") + " " + (item.excerpt ?? ""));
+  const titleMatch = tokens.filter(token => resultText.includes(token)).length >= Math.min(2, tokens.length);
+  const officialPhrase = /\b(official website|official site|website|admissions|contact us|about us)\b/i.test((item.title ?? "") + " " + (item.excerpt ?? ""));
+  return domainMatch || (titleMatch && officialPhrase);
+}
+
 function hasExplicitWebsiteEvidence(item: Evidence): boolean {
   const text = item.excerpt ?? "";
   if (!/\bwebsite\s*(?:address|url|link)?\b/i.test(text)) return false;
@@ -391,6 +413,23 @@ export async function POST(request: NextRequest) {
     const combined = [...aiCandidates, ...deterministicCandidates];
     const candidates = Array.from(new Map(combined.map(item => [candidateKey(item.companyName), item])).values()).slice(0, 24);
 
+    const websiteCheckGroups: Candidate[][] = [];
+    for (let i = 0; i < candidates.length; i += 8) websiteCheckGroups.push(candidates.slice(i, i + 8));
+    const websiteChecks = await Promise.all(websiteCheckGroups.map(async group => {
+      const names = group.map(candidate => '"' + candidate.companyName.slice(0, 50) + '"').join("; ");
+      const query = "Find the official standalone websites owned by these businesses in " + group[0].country + ": " + names + ". Return official business-owned websites only. Exclude directories, social profiles, Google Maps, review pages, news articles, and third-party listings.";
+      try {
+        return { candidates: group, results: await searchBusinessWeb(query, tavilyKey, group[0].country), error: null as string | null };
+      } catch (error) {
+        return { candidates: group, results: [] as WebEvidence[], error: error instanceof Error ? error.message : "Website verification failed." };
+      }
+    }));
+    const websiteCheckResults = websiteChecks.flatMap(check => check.results);
+    const websiteCheckErrorByName = new Map<string, string>();
+    for (const check of websiteChecks) {
+      if (check.error) for (const candidate of check.candidates) websiteCheckErrorByName.set(candidateKey(candidate.companyName), check.error);
+    }
+
     const saved: Array<{id:string;company_name:string;website_url:string|null;fit_score:number|null}> = [];
     let duplicates = 0;
     let weak = 0;
@@ -406,7 +445,9 @@ export async function POST(request: NextRequest) {
         return bits.length > 0 && bits.some(bit => hostLabel.includes(bit));
       });
       const explicitWebsiteEvidence = candidate.evidence.find(item => isProfileUrl(item.url) && hasExplicitWebsiteEvidence(item));
-      if (officialSiteEvidence || explicitWebsiteEvidence || !candidate.profileUrl) { weak++; continue; }
+      const websiteCheckError = websiteCheckErrorByName.get(candidateKey(candidate.companyName));
+      const candidateWebsiteEvidence = websiteCheckResults.find(item => isOfficialWebsiteResult(item, candidate));
+      if (officialSiteEvidence || explicitWebsiteEvidence || candidateWebsiteEvidence || websiteCheckError || !candidate.profileUrl) { weak++; continue; }
 
       const { data: existing, error: existingError } = await db.from("prospects").select("id")
         .eq("organization_id", organizationId).ilike("company_name", candidate.companyName).limit(1).maybeSingle();
@@ -486,7 +527,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       savedCount:saved.length,duplicateCount:duplicates,weakCount:weak,failedSaveCount:failedSaves,
       candidateCount:candidates.length,searchResultCount:uniqueEvidence.length,
-      profileResultCount:uniqueEvidence.filter(item=>isProfileUrl(item.url)).length,
+      profileResultCount:uniqueEvidence.filter(item=>isProfileUrl(item.url)).length,websiteCheckCount:websiteCheckResults.length,websiteCheckFailed:websiteChecks.filter(check=>Boolean(check.error)).length,
       searchResultSample:uniqueEvidence.slice(0,18).map(item=>({title:item.title,url:item.url,host:hostOf(item.url)})),
       searchCount:successfulSearches,searchErrors,provider,
       searchedCountries:Array.from(new Set(batch.map(task=>task.country.name))),
