@@ -51,18 +51,20 @@ function hostOf(value: string): string {
   try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
 const PROFILE_HOSTS = [
-  "facebook.com","instagram.com","linkedin.com","tiktok.com","x.com","twitter.com",
-  "youtube.com","youtu.be","google.com","maps.app.goo.gl","yelp.com","yellowpages.com",
-  "tripadvisor.com","foursquare.com","hotfrog.com","businesslist.com","chamberofcommerce.com",
-  "bark.com","clutch.co","crunchbase.com","trustpilot.com","kompass.com",
+  "maps.google.com","maps.app.goo.gl","business.google.com",
+  "yelp.com","yellowpages.com","tripadvisor.com","foursquare.com",
+  "hotfrog.com","businesslist.com","chamberofcommerce.com","kompass.com",
 ];
 function isProfileUrl(url: string): boolean {
   const host = hostOf(url);
+  if (host === "google.com") {
+    try { return new URL(url).pathname.toLowerCase().startsWith("/maps"); } catch { return false; }
+  }
   return PROFILE_HOSTS.some(domain => host === domain || host.endsWith("." + domain));
 }
 function isNoiseTitle(value: string): boolean {
-  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|facebook|instagram|linkedin|tiktok|twitter|youtube|google maps|google|yelp)$/i.test(value.trim())
-    || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses)\b/i.test(value);
+  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google|yelp)$/i.test(value.trim())
+    || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses|facebook group|community group|discussion thread|classifieds)\b/i.test(value);
 }
 function nameFromTitle(title: string, url: string): string {
   let name = title
@@ -103,8 +105,8 @@ function extractPhone(evidence: Evidence[]): { phone: string | null; whatsapp: s
   return { phone: null, whatsapp: null };
 }
 function hasActivityEvidence(item: Evidence): boolean {
-  return Boolean(item.publishedAt)
-    || /\b(open|opening|opened|serving|established|since|contact|call|visit|location|hours|booking|school|academy|restaurant|hotel|property|real estate|shop|store|products|services|customers|students|patients|office)\b/i.test((item.title ?? "") + " " + (item.excerpt ?? ""));
+  const text = (item.title ?? "") + " " + (item.excerpt ?? "");
+  return /\b(address|directions|open now|opening hours|business hours|phone|call|website|reviews?|rating|established|admissions|enrolment|enrollment|school|academy|college|hotel|restaurant|clinic|shop|store|property|real estate|office|customers|students|patients)\b/i.test(text);
 }
 function taskAt(index: number) {
   const services = [...SAMZY_SERVICE_CATALOG];
@@ -118,12 +120,12 @@ function taskAt(index: number) {
   const sector = sectors[sectorIndex];
   const service = services[serviceIndex];
   const searchTerm = service.searchTerms.slice(0, 3).join(" or ");
-  const variation = cycle % 3 === 0 ? "recently active in 2025 or 2026"
-    : cycle % 3 === 1 ? "small and growing local businesses with public social profiles"
-    : "newly established and independently operated businesses";
-  const query = "Find real " + variation + " " + sector + " in " + country.name
+  const variation = cycle % 3 === 0 ? "currently operating"
+    : cycle % 3 === 1 ? "established independent"
+    : "locally recognised";
+  const query = "Find named, real " + variation + " " + sector + " in " + country.name
     + " that may need " + searchTerm
-    + ". Prioritise businesses with no official website, a public Facebook or Instagram business profile, and a public contact route. Return named businesses, not agencies selling web/design/marketing services, job pages, or generic directories.";
+    + ". Search for Google Maps business listings first (site:google.com/maps), then reputable business-directory listings for individual establishments. Prefer businesses with no official standalone website. Exclude all social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. Return only individual operating businesses with a specific business listing and evidence such as address, hours, phone, reviews, or services. ";
   return { country, sector, service, query: query.slice(0, 590), cycle };
 }
 function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
@@ -145,8 +147,9 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
     : undefined;
   const service = matchedCatalogService?.name ?? profile.service;
   const readiness = matchedCatalogService?.readiness ?? profile.serviceReadiness;
-  const summary = typeof extra?.researchSummary === "string" ? extra.researchSummary.slice(0, 1000)
-    : "Public business/profile result found while researching " + profile.sector + " in " + profile.country + ". No official website was surfaced in this search batch; manually check before outreach.";
+  const summary = typeof extra?.businessDescription === "string" ? extra.businessDescription.trim().slice(0, 220)
+    : typeof extra?.researchSummary === "string" ? extra.researchSummary.trim().slice(0, 220)
+    : profile.sector.replace(/\b(independent|local|and training centres|businesses)\b/gi, "").replace(/\s+/g, " ").trim().slice(0, 140);
   return {
     companyName: cleanName, country: profile.country, industry: profile.sector, service,
     fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url, readiness,
@@ -173,10 +176,17 @@ export async function POST(request: NextRequest) {
     const tavilyKey = process.env.TAVILY_API_KEY ?? "";
     if (!tavilyKey) return jsonError("Tavily is not configured on the server. No prospects were saved.", 503);
     const { data: allowed, error: limitError } = await db.rpc("consume_ai_rate_limit", {
-      p_organization_id: organizationId, p_user_id: authData.user.id, p_limit: 30, p_window_seconds: 3600,
+      p_organization_id: organizationId, p_user_id: actorUserId, p_limit: 30, p_window_seconds: 3600,
     });
     if (limitError) throw new Error("Could not enforce the discovery usage limit.");
     if (!allowed) return jsonError("The shared research limit has been reached. Try again later.", 429);
+
+    const { data: claimed, error: lockError } = await db.rpc("claim_prospect_discovery_lock", {
+      p_organization_id: organizationId, p_lease_seconds: 240,
+    });
+    if (lockError) throw new Error("Could not acquire the prospect discovery lock.");
+    if (!claimed) return NextResponse.json({ error: "A prospect search is already running. The saved queue will continue with the next scheduled run." }, { status: 409, headers: noStore });
+    lockClaimed = true;
 
     const { error: stateInsertError } = await db.from("prospect_discovery_state")
       .upsert({ organization_id: organizationId }, { onConflict: "organization_id", ignoreDuplicates: true });
@@ -197,7 +207,9 @@ export async function POST(request: NextRequest) {
     const successfulSearches = settled.filter(item => item.status === "fulfilled").length;
     const searchErrors = settled.filter(item => item.status === "rejected").length;
     if (successfulSearches === 0) {
-      return jsonError("All four web searches failed. Your saved search position was not advanced; try again after checking Tavily availability.", 502);
+      await db.from("prospect_discovery_state").update({ lease_until: null }).eq("organization_id", organizationId);
+      lockClaimed = false;
+      return jsonError("All four web searches failed. Your saved search position was not advanced; the scheduled worker will retry on its next run.", 502);
     }
     const evidence = settled.flatMap(item => item.status === "fulfilled" ? item.value : []);
     const uniqueEvidence = Array.from(new Map(evidence.map(item => [item.url, item])).values()).slice(0, 40);
@@ -210,11 +222,12 @@ export async function POST(request: NextRequest) {
       const aiRequest: ModelRequest = {
         task: "prospect_discovery",
         objective: [
-          "Act as a careful B2B prospect research analyst. Extract real businesses from the supplied web evidence.",
-          "Return ONLY JSON: {\"prospects\":[{\"companyName\":\"...\",\"evidenceUrls\":[\"exact supplied URL\"],\"matchedService\":\"...\",\"fitScore\":0,\"researchSummary\":\"...\"}]}",
-          "Do not invent names, websites, phone numbers, emails, or facts. Every prospect must be supported by at least one exact supplied URL.",
-          "Prefer actual business Facebook, Instagram, LinkedIn, Google Business, or directory profiles. Exclude agencies selling web design, graphics, marketing, or software; job listings; news; generic directories without a named business; and businesses with an official standalone website shown in the evidence.",
-          "Do not require a phone or email if a public business profile URL exists. Do not claim a business has no website; say no official website was surfaced and manual verification is still required.",
+          "Act as a strict B2B business-verification analyst. Extract only real, named, operating establishments from the supplied web evidence.",
+          "Return ONLY JSON: {\"prospects\":[{\"companyName\":\"...\",\"businessDescription\":\"one short factual sentence describing what this business does\",\"evidenceUrls\":[\"exact supplied URL\"],\"matchedService\":\"...\",\"fitScore\":0}]}",
+          "Do not invent names, websites, phone numbers, emails, photos, or facts. Every prospect must be supported by an exact supplied URL.",
+          "A social-media page, Facebook group/post, Instagram profile, discussion, classified, or personal account is NEVER sufficient evidence and must NEVER be saved. Prioritise Google Maps individual business listings and credible directory pages for a specific named establishment. The evidence should indicate a real operating business through address, opening hours, phone, reviews, admissions, products, or services.",
+          "Exclude agencies selling web design, graphics, marketing, or software; job listings; news; generic directory/category pages; and businesses with an official standalone website shown in the evidence.",
+          "Do not require phone or email if a qualifying Google Maps or reputable directory business listing exists. Do not claim a business has no website; say no official website was surfaced and manual verification is still required.",
           "Match the most relevant Samzy service. Expansion services must remain marked as requiring capability confirmation. Return up to 20 distinct businesses."
         ].join(" "),
         context: {
@@ -276,14 +289,7 @@ export async function POST(request: NextRequest) {
         url:item.url,title:item.title,excerpt:item.excerpt?.slice(0,1200),
         publishedAt:item.publishedAt ?? null,sourceType:isProfileUrl(item.url)?"public_profile":"web_search",
       }));
-      const researchSummary = [
-        "Service match: " + candidate.service + ".",
-        "Search sector: " + candidate.industry + ".",
-        candidate.readiness === "active" ? "Service readiness: active offer; confirm scope and capacity." : "Service readiness: expansion opportunity only; Samuel must confirm capability before offering.",
-        candidate.summary,
-        "Website-first check: no official standalone website was surfaced in this search batch. This is not proof that no website exists; verify manually before outreach.",
-        "Public profile: " + candidate.profileUrl,
-      ].join("\n").slice(0,3000);
+      const researchSummary = candidate.summary.slice(0, 220) || candidate.industry.slice(0, 140);
       const { data: prospect, error: insertError } = await db.from("prospects").insert({
         organization_id:organizationId,company_name:candidate.companyName,website_url:null,
         industry:candidate.industry.slice(0,100),country:candidate.country.slice(0,80),
@@ -333,8 +339,11 @@ export async function POST(request: NextRequest) {
     }).eq("organization_id", organizationId);
     if (stateUpdateError) throw new Error("Prospects were processed, but the continuous-search cursor could not be saved.");
 
+    await db.from("prospect_discovery_state").update({ lease_until: null }).eq("organization_id", organizationId);
+    lockClaimed = false;
+
     await db.from("audit_events").insert({
-      organization_id:organizationId,actor_user_id:authData.user.id,actor_type:"user",
+      organization_id:organizationId,actor_user_id:isCron ? null : actorUserId,actor_type:isCron ? "system" : "user",
       action:"crm.prospects.ai_discovered",entity_type:"prospect",entity_id:saved[0]?.id ?? null,
       metadata:{
         saved_count:saved.length,duplicate_count:duplicates,weak_count:weak,failed_saves:failedSaves,
@@ -356,6 +365,13 @@ export async function POST(request: NextRequest) {
       providerWarnings:providerFailures.slice(0,3),
     },{status:200,headers:noStore});
   } catch (cause) {
+    if (lockClaimed) {
+      try {
+        const db = createServerSupabaseClient();
+        await db.from("prospect_discovery_state").update({ lease_until: null })
+          .eq("organization_id", request.headers.get("x-organization-id") ?? "");
+      } catch { /* the lease expires automatically if release fails */ }
+    }
     console.error("[prospect-discovery] failed",{message:cause instanceof Error?cause.message:"Unknown error"});
     return jsonError(cause instanceof Error?cause.message:"Prospect discovery failed. No unverified outreach was sent.",503);
   }
