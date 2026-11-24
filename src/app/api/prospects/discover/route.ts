@@ -399,6 +399,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       savedCount:saved.length,duplicateCount:duplicates,weakCount:weak,failedSaveCount:failedSaves,
       candidateCount:candidates.length,searchResultCount:uniqueEvidence.length,
+      profileResultCount:uniqueEvidence.filter(item=>isProfileUrl(item.url)).length,
+      searchResultSample:uniqueEvidence.slice(0,18).map(item=>({title:item.title,url:item.url,host:hostOf(item.url)})),
       searchCount:successfulSearches,searchErrors,provider,
       searchedCountries:Array.from(new Set(batch.map(task=>task.country.name))),
       searchedServices:Array.from(new Set(batch.map(task=>task.service.name))),
