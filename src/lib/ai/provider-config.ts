@@ -50,4 +50,6 @@ export function createConfiguredAdapters() {
       ? createAnthropicAdapter(adapterConfig)
       : createOpenAICompatibleAdapter(adapterConfig)];
   });
+  const priority: Record<string, number> = { groq:0, gemini:1, openrouter:2, openai:3, anthropic:4 };
+  return adapters.sort((left,right) => (priority[left.provider] ?? 10) - (priority[right.provider] ?? 10));
 }
