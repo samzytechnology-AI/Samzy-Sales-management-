@@ -50,25 +50,39 @@ function parseJson(text: string): unknown {
 function hostOf(value: string): string {
   try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
-const PROFILE_HOSTS = ["maps.google.com"];
+const PROFILE_HOSTS = [
+  "maps.google.com","yelp.com","yellowpages.com","tripadvisor.com","foursquare.com",
+  "hotfrog.com","businesslist.com","chamberofcommerce.com","kompass.com",
+];
 function isProfileUrl(url: string): boolean {
   const host = hostOf(url);
-  if (host === "google.com" || host === "maps.google.com") {
-    try {
-      const parsed = new URL(url);
-      const path = parsed.pathname.toLowerCase();
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    if (host === "google.com" || host === "maps.google.com") {
       return path.includes("/maps/place/") || (path.startsWith("/maps") && parsed.searchParams.has("cid"));
-    } catch { return false; }
-  }
+    }
+    if (host === "yelp.com") return path.startsWith("/biz/");
+    if (host === "yellowpages.com") return path.includes("/mip/");
+    if (host === "tripadvisor.com") return /\/(restaurant|hotel|attraction)_review/.test(path);
+    if (host === "foursquare.com") return path.startsWith("/v/");
+    if (host === "hotfrog.com") return path.includes("/company/") || path.includes("/business/");
+    if (host === "businesslist.com") {
+      const parts = path.split("/").filter(Boolean);
+      return parts.length >= 2 && !parts.some(part => /^(category|categories|directory|search|tag|industry|city)$/i.test(part));
+    }
+    if (host === "chamberofcommerce.com") return path.includes("/business-directory/") && path.split("/").filter(Boolean).length >= 3;
+    if (host === "kompass.com") return path.includes("/c/") || path.includes("/company/");
+  } catch { return false; }
   return PROFILE_HOSTS.some(domain => host === domain || host.endsWith("." + domain));
 }
 function isNoiseTitle(value: string): boolean {
-  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google ads|google business profile|local guides|google maps local guides|share your world as a local guide|google|yelp)$/i.test(value.trim())
+  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google ads|google business profile|local guides|google maps local guides|share your world as a local guide|yellow pages|businesslist|tripadvisor|foursquare|hotfrog|kompass|chamber of commerce|google|yelp)$/i.test(value.trim())
     || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses|facebook group|community group|discussion thread|classifieds)\b/i.test(value);
 }
 function nameFromTitle(title: string, url: string): string {
   let name = title
-    .replace(/\s*(?:\||–|—|-)\s*(?:facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|google ads|google business profile|tripadvisor|yelp).*$/i, "")
+    .replace(/\s*(?:\||–|—|-)\s*(?:facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|google ads|google business profile|tripadvisor|yellow pages|businesslist|foursquare|hotfrog|kompass|chamber of commerce|yelp).*$/i, "")
     .replace(/\s*(?:\||–|—|-)\s*(?:official website|official page|home page|homepage|contact us|about us).*$/i, "")
     .replace(/\s*·\s*\d+(?:\.\d+)?\s*\([^)]*\).*$/, "")
     .replace(/^\s*(?:home|welcome to)\s+/i, "").trim();
@@ -125,7 +139,7 @@ function taskAt(index: number) {
     : "locally recognised";
   const query = "Find named, real " + variation + " " + sector + " in " + country.name
     + " that may need " + searchTerm
-    + ". Search only for individual Google Maps place listings (site:google.com/maps/place). Prefer businesses with no official standalone website. Exclude all social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. Return only individual operating businesses with a specific business listing and evidence such as address, hours, phone, reviews, or services. ";
+    + ". Search Google Maps place listings first (site:google.com/maps/place), then individual business listings on Yelp, Yellow Pages, TripAdvisor, Foursquare, Hotfrog, BusinessList, Chamber of Commerce, or Kompass. Prefer businesses with no official standalone website. Exclude all social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. Return only individual operating businesses with a specific business listing and evidence such as address, hours, phone, reviews, or services. ";
   return { country, sector, service, query: query.slice(0, 590), cycle };
 }
 function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
@@ -251,9 +265,9 @@ export async function POST(request: NextRequest) {
           "Act as a strict B2B business-verification analyst. Extract only real, named, operating establishments from the supplied web evidence.",
           "Return ONLY JSON: {\"prospects\":[{\"companyName\":\"...\",\"businessDescription\":\"one short factual sentence describing what this business does\",\"evidenceUrls\":[\"exact supplied URL\"],\"matchedService\":\"...\",\"fitScore\":0}]}",
           "Do not invent names, websites, phone numbers, emails, photos, or facts. Every prospect must be supported by an exact supplied URL.",
-          "A social-media page, Facebook group/post, Instagram profile, discussion, classified, or personal account is NEVER sufficient evidence and must NEVER be saved. Accept only a specific, named Google Maps place listing for an individual establishment. The evidence should indicate a real operating business through address, opening hours, phone, reviews, admissions, products, or services.",
+          "A social-media page, Facebook group/post, Instagram profile, discussion, classified, or personal account is NEVER sufficient evidence and must NEVER be saved. Accept only a specific, named Google Maps place listing or an individual business profile on a reputable business directory. The evidence should indicate a real operating business through address, opening hours, phone, reviews, admissions, products, or services.",
           "Exclude agencies selling web design, graphics, marketing, or software; job listings; news; generic directory/category pages; and businesses with an official standalone website shown in the evidence.",
-          "Do not require phone or email if a qualifying Google Maps place listing exists. Do not claim a business has no website; say no official website was surfaced and manual verification is still required.",
+          "Do not require phone or email if a qualifying Google Maps or reputable directory business listing exists. Do not claim a business has no website; say no official website was surfaced and manual verification is still required.",
           "Match the most relevant Samzy service. Expansion services must remain marked as requiring capability confirmation. Return up to 20 distinct businesses."
         ].join(" "),
         context: {
