@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     if (limitError) throw new Error("Could not enforce the discovery usage limit.");
     if (!allowed) return jsonError("The shared research limit has been reached. Try again later.", 429);
 
-    const serviceNames = "business websites, e-commerce, custom web applications, Android apps, school and hospital management systems, graphic design, AI automation, cybersecurity";
+    const serviceNames = "business websites, e-commerce, custom web applications, Android apps, school and hospital management systems, graphic design, AI automation, cybersecurity, SEO demand, social media management demand, IT/cloud support, data analytics, API integrations and e-learning/CBT demand";
     const searchResults = await Promise.all(countries.map(async country => {
       const query = `Find currently operating SMEs in ${country.name} in real estate, education, professional services, technology, consulting, retail, hospitality and growing local businesses that may need ${serviceNames}. Only return businesses with NO active official website (or a clearly broken website), recent business activity, and a publicly listed contact route such as WhatsApp or business email. Exclude businesses with an adequate active website and agencies selling these services. Include credible official social/business profile sources.`;
       try { return { country, evidence: await searchBusinessWeb(query.slice(0, 590), tavilyKey, country.code) }; }
