@@ -443,8 +443,14 @@ export default function Home() {
         throw new Error([result.error??"The AI service could not complete the request.",detail].filter(Boolean).join(" "));
       }
       if(result.conversationId)setConversationId(result.conversationId);
-      const allWarnings=[...(result.warnings??[]),...(researchWarning?[researchWarning]:[])];
-      const answer=[result.synthesis,allWarnings.length?"\n\nNotes: "+allWarnings.join("; "):""].join("");
+      const providerWarnings=(result.warnings??[]) as string[];
+      const notes:string[]=[];
+      const modelCount=Array.isArray(result.contributions)?result.contributions.length:0;
+      if(modelCount>0&&modelCount<5)notes.push(`Limited response: ${modelCount} of 5 AI models replied.`);
+      if(providerWarnings.some((warning:string)=>warning.startsWith("Synthesis pass failed")))notes.push("Cross-checking was unavailable for this reply.");
+      if(providerWarnings.some((warning:string)=>/credit|billing|quota|429|rate limit/i.test(warning)))notes.push("Some AI providers need credits or are temporarily rate-limited.");
+      if(researchWarning)notes.push("Live web research was unavailable.");
+      const answer=[result.synthesis,notes.length?"\n\n*AI status:* "+notes.join(" "):""].join("");
       setMessages(old=>[...old.map(message=>message.id===messageId?{...message,persistedId:result.userMessageId??message.persistedId}:message),{id:Date.now()+2,role:"assistant",content:answer||"The AI service returned no synthesis."}]);
       setEditingMessageId(null);
     }catch(err){
