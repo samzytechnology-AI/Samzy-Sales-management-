@@ -80,10 +80,10 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
     warnings.push(`Synthesis pass failed: ${error instanceof Error ? error.message : "Unknown synthesis error"}`);
     const availableAnswer = contributions[0]?.content?.trim() ?? "";
     const boundedAnswer = availableAnswer.length > 1_800
-      ? availableAnswer.slice(0, 1_800).replace(/\\s+\\S*$/, "") + "…"
+      ? availableAnswer.slice(0, 1_800).replace(/\s+\S*$/, "") + "…"
       : availableAnswer;
     synthesis = boundedAnswer
-      ? "### Available answer\\n\\n" + boundedAnswer + "\\n\\n*This reply is based on one model and has not been cross-checked.*"
+      ? "### Available answer\n\n" + boundedAnswer + "\n\n*This reply is based on one model and has not been cross-checked.*"
       : "I couldn't produce a usable answer because the synthesis service was unavailable. Please try again shortly.";
   }
   return { objective: request.objective, contributions, synthesis, warnings, completedAt: new Date().toISOString() };
