@@ -35,6 +35,27 @@ type Candidate = {
   whatsapp: string | null; phone: string | null; email: string | null;
 };
 
+const COUNTRY_ALIASES: Record<string, string[]> = {
+  "Nigeria": ["nigeria"],
+  "United Kingdom": ["united kingdom","uk","england","scotland","wales","northern ireland","great britain"],
+  "United States": ["united states","united states of america","usa"],
+  "Canada": ["canada"],
+  "Australia": ["australia"],
+  "United Arab Emirates": ["united arab emirates","uae","dubai","abu dhabi","sharjah","ajman"],
+  "South Africa": ["south africa"],
+};
+const OTHER_COUNTRIES = ["Argentina","India","Kenya","Philippines","Brazil","Mexico","Spain","France","Germany","Italy","Japan","China","Indonesia","Malaysia","Singapore","New Zealand","Ireland","Ghana","Egypt","Turkey","Saudi Arabia","Pakistan","Bangladesh","Sri Lanka","Nepal","Netherlands","Belgium","Switzerland","Sweden","Norway","Denmark","Poland","Portugal","Russia","Ukraine","South Korea","Thailand","Vietnam","Chile","Colombia","Peru","Morocco","Ethiopia","Uganda","Tanzania","Rwanda","Zambia","Zimbabwe","Botswana","Namibia","Senegal","Cameroon","Ivory Coast","Algeria","Tunisia","Qatar","Kuwait","Bahrain","Oman","Israel","Lebanon","Jordan","Iraq","Iran","Afghanistan","Myanmar","Cambodia","Laos","Mongolia","Taiwan","Hong Kong","Fiji","Dominican Republic","Costa Rica","Panama","Guatemala","Honduras","El Salvador","Nicaragua","Bolivia","Paraguay","Uruguay","Ecuador","Venezuela","Cuba","Haiti","Trinidad and Tobago","Bahamas","Belize","Guyana","Suriname","Iceland","Luxembourg","Austria","Czech Republic","Slovakia","Hungary","Romania","Bulgaria","Greece","Croatia","Serbia","Albania","North Macedonia","Montenegro","Estonia","Latvia","Lithuania","Finland","Mozambique","Malawi","Lesotho","Madagascar","Mauritius","Liberia","Sierra Leone","Togo","Benin","Burkina Faso","Niger","Mali","Chad","Gabon","Angola","Somalia","Sudan","South Sudan","Libya","Yemen","Syria","Armenia","Georgia","Azerbaijan","Kazakhstan","Uzbekistan","Kyrgyzstan","Tajikistan","Turkmenistan","Brunei","Timor-Leste","Papua New Guinea"];
+function evidenceMatchesCountry(item: Evidence, targetCountry: string): boolean {
+  const normalize = (value: string) => " " + value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + " ";
+  const text = normalize([item.title ?? "", item.excerpt ?? "", item.url ?? ""].join(" "));
+  const targetAliases = (COUNTRY_ALIASES[targetCountry] ?? [targetCountry]).map(value => normalize(value));
+  const terms = [...OTHER_COUNTRIES, ...Object.values(COUNTRY_ALIASES).flat()];
+  return !terms.some(term => {
+    const normalized = normalize(term);
+    return !targetAliases.includes(normalized) && text.includes(normalized);
+  });
+}
+
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status, headers: noStore });
 }
@@ -81,8 +102,9 @@ function isNoiseTitle(value: string): boolean {
     || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses|facebook group|community group|discussion thread|classifieds)\b/i.test(value);
 }
 function nameFromTitle(title: string, url: string): string {
-  let name = title
-    .replace(/\s*(?:\||–|—|-)\s*(?:facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|google ads|google business profile|tripadvisor|yellow pages|businesslist|foursquare|hotfrog|kompass|chamber of commerce|yelp).*$/i, "")
+  let name = hostOf(url) === "tripadvisor.com" ? title.split(",")[0].trim() : title;
+  name = name
+    .replace(/\s*(?:\||–|—|-)\s*(?:restaurant reviews|hotel reviews|attraction reviews|reviews?|photos?|pictures?|facebook|instagram|linkedin|tiktok|twitter|x|youtube|google maps|google ads|google business profile|tripadvisor|yellow pages|businesslist|foursquare|hotfrog|kompass|chamber of commerce|yelp).*$/i, "")
     .replace(/\s*(?:\||–|—|-)\s*(?:official website|official page|home page|homepage|contact us|about us).*$/i, "")
     .replace(/\s*·\s*\d+(?:\.\d+)?\s*\([^)]*\).*$/, "")
     .replace(/^\s*(?:home|welcome to)\s+/i, "").trim();
@@ -160,11 +182,15 @@ function nameMatchesEvidence(name: string, item: Evidence): boolean {
 }
 
 function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<string, unknown>): Candidate | null {
-  const cleanName = companyName.trim().replace(/\s+/g, " ").slice(0, 160);
-  if (cleanName.length < 3 || isNoiseTitle(cleanName) || !evidence.length) return null;
+  if (!evidence.length) return null;
   const orderedEvidence = [...evidence].sort((a,b) => Number(isProfileUrl(b.url)) - Number(isProfileUrl(a.url)));
   const profile = orderedEvidence.find(item => isProfileUrl(item.url));
-  if (!profile || !hasActivityEvidence(profile) || !nameMatchesEvidence(cleanName, profile)) return null;
+  if (!profile || !hasActivityEvidence(profile) || !evidenceMatchesCountry(profile, profile.country)) return null;
+  let cleanName = companyName.trim().replace(/\s+/g, " ").slice(0, 160);
+  if (/\b(reviews?|photos?|pictures?|ranked|unbiased|tripadvisor)\b/i.test(cleanName) || hostOf(profile.url) === "tripadvisor.com") {
+    cleanName = nameFromTitle(profile.title ?? companyName, profile.url);
+  }
+  if (cleanName.length < 3 || isNoiseTitle(cleanName) || !nameMatchesEvidence(cleanName, profile)) return null;
   const contact = extractPhone(orderedEvidence);
   const fit = typeof extra?.fitScore === "number" && Number.isFinite(extra.fitScore)
     ? Math.max(0, Math.min(100, Math.round(extra.fitScore))) : null;
@@ -262,9 +288,9 @@ export async function POST(request: NextRequest) {
       const aiRequest: ModelRequest = {
         task: "prospect_discovery",
         objective: [
-          "Act as a strict B2B business-verification analyst. Extract only real, named, operating establishments from the supplied web evidence.",
+          "Act as a strict B2B business-verification analyst. Extract only real, named, operating establishments from the supplied web evidence, and verify that each listing is physically located in the requested country.",
           "Return ONLY JSON: {\"prospects\":[{\"companyName\":\"...\",\"businessDescription\":\"one short factual sentence describing what this business does\",\"evidenceUrls\":[\"exact supplied URL\"],\"matchedService\":\"...\",\"fitScore\":0}]}",
-          "Do not invent names, websites, phone numbers, emails, photos, or facts. Every prospect must be supported by an exact supplied URL.",
+          "The companyName must be only the actual business name, never the full directory page title, review text, location suffix, or directory brand. If the business name or country cannot be confirmed from the listing, omit it. Do not invent names, websites, phone numbers, emails, photos, or facts. Every prospect must be supported by an exact supplied URL.",
           "A social-media page, Facebook group/post, Instagram profile, discussion, classified, or personal account is NEVER sufficient evidence and must NEVER be saved. Accept only a specific, named Google Maps place listing or an individual business profile on a reputable business directory. The evidence should indicate a real operating business through address, opening hours, phone, reviews, admissions, products, or services.",
           "Exclude agencies selling web design, graphics, marketing, or software; job listings; news; generic directory/category pages; and businesses with an official standalone website shown in the evidence.",
           "Do not require phone or email if a qualifying Google Maps or reputable directory business listing exists. Do not claim a business has no website; say no official website was surfaced and manual verification is still required.",
