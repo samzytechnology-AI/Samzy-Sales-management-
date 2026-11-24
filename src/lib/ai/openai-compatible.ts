@@ -10,8 +10,8 @@ export interface OpenAICompatibleConfig {
   baseUrl: string;
 }
 
-const MAX_CONTEXT_CHARS = 24_000;
-const MAX_EVIDENCE_CHARS = 8_000;
+const MAX_CONTEXT_CHARS = 12_000;
+const MAX_EVIDENCE_CHARS = 4_000;
 
 export function buildPrompt(request: ModelRequest): string {
   // Keep the prompt bounded: provider limits differ, and a large company snapshot
@@ -70,8 +70,8 @@ export function createOpenAICompatibleAdapter(config: OpenAICompatibleConfig): M
         { role: "user", content: buildPrompt(request) },
       ];
       const providerPayload = config.provider === "openai"
-        ? { model: config.model, messages, max_completion_tokens: 1200 }
-        : { model: config.model, messages, temperature: 0.2, max_tokens: 1200 };
+        ? { model: config.model, messages, max_completion_tokens: 700 }
+        : { model: config.model, messages, temperature: 0.2, max_tokens: 700 };
       const response = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
