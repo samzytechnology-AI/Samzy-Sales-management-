@@ -41,7 +41,7 @@ export function getProviderConfiguration(): ProviderSlotConfig[] {
 
 /** Return every fully configured provider. Individual provider failures are isolated by the orchestrator. */
 export function createConfiguredAdapters() {
-  return SLOTS.flatMap((slot) => {
+  const adapters = SLOTS.flatMap((slot) => {
     const config = readSlot(slot);
     if (!config.configured) return [];
     const apiKey = process.env[`AI_MODEL_${slot}_API_KEY`] ?? "";
