@@ -616,7 +616,7 @@ export default function Home() {
                     <p>{description||"Business prospect"}</p>
                     <div className="prospect-actions">
                       {profileUrl?<a href={profileUrl} target="_blank" rel="noreferrer">View Profile ↗</a>:null}
-                      {whatsapp?<a className="prospect-whatsapp" href={`https://wa.me/${String(whatsapp.address).replace(/\\D/g,"")}`} target="_blank" rel="noreferrer">WhatsApp ↗</a>:null}
+                      {whatsapp?<a className="prospect-whatsapp" href={`https://wa.me/${String(whatsapp.address).replace(/\D/g,"")}`} target="_blank" rel="noreferrer">WhatsApp ↗</a>:null}
                     </div>
                   </div>
                 </article>;
