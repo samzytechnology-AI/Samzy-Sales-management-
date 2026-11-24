@@ -607,7 +607,11 @@ export default function Home() {
               {openForm===active && (<><form className="record-form" onSubmit={e=>void submitModuleForm(e,"prospect")}><h3>Add a prospect</h3><input name="company_name" placeholder="Company name" required/><input name="website_url" type="url" placeholder="Website URL (optional)"/><input name="industry" placeholder="Industry"/><input name="country" placeholder="Country"/><input name="fit_score" type="number" min="0" max="100" step="1" placeholder="Fit score (0–100)"/><textarea name="research_summary" placeholder="Research notes / evidence summary"/><button className="primary" disabled={saveBusy}>Save prospect</button><button type="button" className="inline-action" onClick={()=>setOpenForm(null)}>Cancel</button></form></>)}
               <div className="prospect-list">{(workspace?.prospects??[]).map(item=>{
                 const profileUrl=(item.evidence??[]).find((source:any)=>typeof source?.url==="string")?.url as string|undefined;
-                const whatsapp=(workspace?.contactPoints??[]).find(contact=>contact.prospect_id===item.id&&contact.channel==="whatsapp");
+                const phoneContact=(workspace?.contactPoints??[]).find(contact=>contact.prospect_id===item.id&&(contact.channel==="whatsapp"||contact.channel==="voice"));
+                const prefixes:Record<string,string>={"Nigeria":"234","UK":"44","United Kingdom":"44","US":"1","USA":"1","United States":"1","Canada":"1","Australia":"61","UAE":"971","United Arab Emirates":"971","South Africa":"27"};
+                const rawPhone=String(phoneContact?.address??"").replace(/\D/g,"").replace(/^00/,"");
+                const prefix=prefixes[String(item.country??"")]??"";
+                const whatsappNumber=rawPhone?(rawPhone.startsWith(prefix)&&prefix?rawPhone:rawPhone.startsWith("0")&&prefix?prefix+rawPhone.slice(1):prefix&&rawPhone.length<=10?prefix+rawPhone:rawPhone):"";
                 const description=String(item.research_summary??item.industry??"").split("\n")[0].trim().slice(0,170);
                 return <article className="prospect-card" key={item.id}>
                   <div className="prospect-thumbnail" aria-hidden="true">{String(item.company_name??"B").trim().charAt(0).toUpperCase()}</div>
@@ -616,7 +620,7 @@ export default function Home() {
                     <p>{description||"Business prospect"}</p>
                     <div className="prospect-actions">
                       {profileUrl?<a href={profileUrl} target="_blank" rel="noreferrer">View Profile ↗</a>:null}
-                      {whatsapp?<a className="prospect-whatsapp" href={`https://wa.me/${String(whatsapp.address).replace(/\D/g,"")}`} target="_blank" rel="noreferrer">WhatsApp ↗</a>:null}
+                      {whatsappNumber.length>=10?<a className="prospect-whatsapp" href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noreferrer">WhatsApp ↗</a>:null}
                     </div>
                   </div>
                 </article>;
