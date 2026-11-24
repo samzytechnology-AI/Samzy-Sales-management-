@@ -613,8 +613,9 @@ export default function Home() {
                 const prefix=prefixes[String(item.country??"")]??"";
                 const whatsappNumber=rawPhone?(rawPhone.startsWith(prefix)&&prefix?rawPhone:rawPhone.startsWith("0")&&prefix?prefix+rawPhone.slice(1):prefix&&rawPhone.length<=10?prefix+rawPhone:rawPhone):"";
                 const description=String(item.research_summary??item.industry??"").split("\n")[0].trim().slice(0,170);
+                const thumbnailUrl=(item.evidence??[]).find((source:any)=>typeof source?.thumbnailUrl==="string")?.thumbnailUrl as string|undefined;
                 return <article className="prospect-card" key={item.id}>
-                  <div className="prospect-thumbnail" aria-hidden="true">{String(item.company_name??"B").trim().charAt(0).toUpperCase()}</div>
+                  <div className="prospect-thumbnail" aria-hidden="true"><span>{String(item.company_name??"B").trim().charAt(0).toUpperCase()}</span>{thumbnailUrl?<img src={thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none";}}/>:null}</div>
                   <div className="prospect-card-content">
                     <b>{item.company_name}</b>
                     <p>{description||"Business prospect"}</p>
