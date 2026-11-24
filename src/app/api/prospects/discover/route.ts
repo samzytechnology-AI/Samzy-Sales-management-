@@ -164,10 +164,6 @@ function taskAt(index: number) {
   const country = countries[countryIndex];
   const sector = sectors[sectorIndex];
   const service = services[serviceIndex];
-  const cycle = Math.floor(index / total);
-  const country = countries[countryIndex];
-  const sector = sectors[sectorIndex];
-  const service = services[serviceIndex];
   const variations = [
     "with a named physical location and opening hours",
     "with a public business phone number and street address",
