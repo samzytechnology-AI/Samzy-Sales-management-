@@ -131,6 +131,13 @@ function normalizedName(value: string): string {
 function candidateKey(value: string): string {
   return normalizedName(value).replace(/\b(limited|ltd|inc|llc|plc|company|co)\b/g, "").trim();
 }
+function hasExplicitWebsiteEvidence(item: Evidence): boolean {
+  const text = item.excerpt ?? "";
+  if (!/\bwebsite\s*(?:address|url|link)?\b/i.test(text)) return false;
+  if (/\b(?:not available|not provided|none|n\/a|no website)\b/i.test(text)) return false;
+  return /(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|org|net|ng|edu|co\.uk|com\.ng|com\.au)\b)/i.test(text);
+}
+
 function extractEmail(evidence: Evidence[]): string | null {
   for (const item of evidence) {
     const match = item.excerpt?.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
@@ -376,7 +383,8 @@ export async function POST(request: NextRequest) {
         const bits = candidateKey(candidate.companyName).split(" ").filter(bit => bit.length >= 3 && !generic.has(bit));
         return bits.length > 0 && bits.some(bit => hostLabel.includes(bit));
       });
-      if (officialSiteEvidence || !candidate.profileUrl) { weak++; continue; }
+      const explicitWebsiteEvidence = candidate.evidence.find(item => isProfileUrl(item.url) && hasExplicitWebsiteEvidence(item));
+      if (officialSiteEvidence || explicitWebsiteEvidence || !candidate.profileUrl) { weak++; continue; }
 
       const { data: existing, error: existingError } = await db.from("prospects").select("id")
         .eq("organization_id", organizationId).ilike("company_name", candidate.companyName).limit(1).maybeSingle();
