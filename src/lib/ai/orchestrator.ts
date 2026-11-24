@@ -49,6 +49,23 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
     .map((slot) => adapters.find((adapter) => adapter.slot === slot && successfulSlots.has(slot)))
     .find(Boolean) ?? adapters[0];
 
+  if (contributions.length === 1) {
+    warnings.push("Only one model responded; cross-checking was skipped.");
+    const availableAnswer = contributions[0].content.trim();
+    const boundedAnswer = availableAnswer.length > 1_800
+      ? availableAnswer.slice(0, 1_800).replace(/\s+\S*$/, "") + "…"
+      : availableAnswer;
+    return {
+      objective: request.objective,
+      contributions,
+      synthesis: boundedAnswer
+        ? "### Available answer\n\n" + boundedAnswer + "\n\n*This reply is based on one model and has not been cross-checked.*"
+        : "I couldn't produce a usable answer. Please try again shortly.",
+      warnings,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
   let synthesis: string;
   try {
     const result = await synthesizer.generate({
