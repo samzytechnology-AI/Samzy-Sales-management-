@@ -300,9 +300,10 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
   const readiness = matchedCatalogService?.readiness ?? profile.serviceReadiness;
   let summary = typeof extra?.businessDescription === "string" ? extra.businessDescription.trim().slice(0, 220)
     : typeof extra?.researchSummary === "string" ? extra.researchSummary.trim().slice(0, 220) : "";
-  const genericSummary = !summary || sectors.some(sector => normalizedName(sector) === normalizedName(summary));
+  const descriptiveVerb = /\b(provides|offers|speciali[sz]es|delivers|manufactures|supplies|operates|serves|we provide|we offer|providing|offering|is a|are a)\b/i;
+  const genericSummary = !summary || sectors.some(sector => normalizedName(sector) === normalizedName(summary)) || !descriptiveVerb.test(summary);
   if (genericSummary) summary = descriptionFromEvidence(profile) ?? "";
-  if (!summary || isSamzyCompetitor(cleanName, summary)) return null;
+  if (!summary || !descriptiveVerb.test(summary) || isSamzyCompetitor(cleanName, summary)) return null;
   const email = extractEmail(orderedEvidence);
   return {
     companyName: cleanName, country: profile.country,
