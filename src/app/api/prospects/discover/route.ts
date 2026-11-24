@@ -51,19 +51,23 @@ function hostOf(value: string): string {
   try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
 const PROFILE_HOSTS = [
-  "maps.google.com","maps.app.goo.gl",
+  "maps.google.com",
   "yelp.com","yellowpages.com","tripadvisor.com","foursquare.com",
   "hotfrog.com","businesslist.com","chamberofcommerce.com","kompass.com",
 ];
 function isProfileUrl(url: string): boolean {
   const host = hostOf(url);
-  if (host === "google.com") {
-    try { return new URL(url).pathname.toLowerCase().startsWith("/maps"); } catch { return false; }
+  if (host === "google.com" || host === "maps.google.com") {
+    try {
+      const parsed = new URL(url);
+      const path = parsed.pathname.toLowerCase();
+      return path.includes("/maps/place/") || (path.startsWith("/maps") && parsed.searchParams.has("cid"));
+    } catch { return false; }
   }
   return PROFILE_HOSTS.some(domain => host === domain || host.endsWith("." + domain));
 }
 function isNoiseTitle(value: string): boolean {
-  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google ads|google business profile|google|yelp)$/i.test(value.trim())
+  return /^(home|about|contact|login|sign in|sign up|search results|business directory|directory|top \d+|best \d+|jobs|careers|products|services|companies|google maps|google ads|google business profile|local guides|google maps local guides|share your world as a local guide|google|yelp)$/i.test(value.trim())
     || /\b(job openings|vacancies|website template|web design agency|digital marketing agency|seo agency|marketing agency|directory of|top \d+ businesses|facebook group|community group|discussion thread|classifieds)\b/i.test(value);
 }
 function nameFromTitle(title: string, url: string): string {
@@ -125,7 +129,7 @@ function taskAt(index: number) {
     : "locally recognised";
   const query = "Find named, real " + variation + " " + sector + " in " + country.name
     + " that may need " + searchTerm
-    + ". Search for Google Maps business listings first (site:google.com/maps), then reputable business-directory listings for individual establishments. Prefer businesses with no official standalone website. Exclude all social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. Return only individual operating businesses with a specific business listing and evidence such as address, hours, phone, reviews, or services. ";
+    + ". Search for Google Maps business listings first (site:google.com/maps/place), then reputable business-directory listings for individual establishments. Prefer businesses with no official standalone website. Exclude all social-media-only pages, Facebook groups/posts, Instagram profiles, discussion threads, job pages, agencies selling Samzy services, and generic directory category pages. Return only individual operating businesses with a specific business listing and evidence such as address, hours, phone, reviews, or services. ";
   return { country, sector, service, query: query.slice(0, 590), cycle };
 }
 function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
