@@ -40,7 +40,7 @@ function normaliseWebsite(value: unknown): string | null {
 function emailFromEvidence(value: unknown, evidence: Array<{url:string;title?:string;excerpt?:string}>) {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
   return evidence.some(item => (item.excerpt ?? "").toLowerCase().includes(email)) ? email : null;
 }
 function phoneFromEvidence(value: unknown, evidence: Array<{url:string;title?:string;excerpt?:string}>) {
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         "Prioritise businesses with no official website, or a broken/outdated website only when evidence proves it. If a search result is an agency, directory, job board, news article, inactive business, or unrelated page, exclude it.",
         "For every business return keys: companyName, websiteUrl (official website URL or null), industry, country, fitScore (0-100, conservative), matchedService (one active service name), readiness (active or requires_confirmation), observedNeed (specific evidence-backed need; otherwise say unconfirmed), researchSummary (concise with evidence URLs), evidenceUrls (array of exact supplied URLs), officialWhatsapp (international digits-only phone only when the exact number is visibly present in a supplied excerpt; otherwise null), officialEmail (email address only when the exact address is visibly present in a supplied excerpt; otherwise null).",
         "Match only active Samzy services where possible. Expansion-only services must be marked requires_confirmation and never presented as an available offer.",
-        "A company must be currently operating or have recent credible activity, have no active usable official website (or a clearly broken one), and have an explicit public contact route in the supplied evidence. Exclude companies with an adequate active official website. Do not infer a WhatsApp number or email. Do not claim website absent merely because search did not return one; say website status needs manual verification.",
+        "A company must be currently operating or have recent credible activity, have no active official website, and have an explicit public contact route in the supplied evidence. Exclude every business with an active official website. For a business with no official website, websiteUrl MUST be null. Do not infer a WhatsApp number or email. Do not claim website absent merely because search did not return one; say website status needs manual verification.",
         "Use only source URLs included below. No markdown, no commentary, no extra keys."
       ].join(" "),
       context: {
@@ -132,6 +132,9 @@ export async function POST(request: NextRequest) {
       const companyName = typeof item.companyName === "string" ? item.companyName.trim().slice(0,160) : "";
       if (companyName.length < 2) { skipped++; continue; }
       const website = normaliseWebsite(item.websiteUrl);
+// This campaign is specifically for businesses without a working official website.
+// Existing websites are excluded rather than weakening the saved-prospect filter.
+if (website) { skipped++; continue; }
       const evidenceUrls = Array.isArray(item.evidenceUrls)
         ? item.evidenceUrls.filter((url): url is string => typeof url === "string" && evidence.some(source => source.url === url)).slice(0,8)
         : [];
@@ -144,6 +147,9 @@ export async function POST(request: NextRequest) {
         website ? "Official website identified; review it before outreach." : "No official website was established from this search; manually verify before qualification.",
       ].filter(Boolean).join("\n");
       const fitScore = typeof item.fitScore === "number" && Number.isFinite(item.fitScore) ? Math.max(0,Math.min(100,Math.round(item.fitScore))) : null;
+      const phone = phoneFromEvidence(item.officialWhatsapp, sourceEvidence);
+      const email = emailFromEvidence(item.officialEmail, sourceEvidence);
+      if (!phone && !email) { skipped++; continue; }
       const { data: existing, error: existingError } = await db.from("prospects").select("id")
         .eq("organization_id",organizationId).ilike("company_name",companyName).limit(1).maybeSingle();
       if (existingError) throw new Error("Could not check prospect duplicates.");
@@ -164,11 +170,17 @@ export async function POST(request: NextRequest) {
       }).select("id,company_name,website_url,fit_score").single();
       if (insertError || !prospect) { skipped++; continue; }
       saved.push(prospect);
-      const phone = phoneFromEvidence(item.officialWhatsapp, sourceEvidence);
       if (phone) {
         await db.from("contact_points").insert({
           organization_id: organizationId, prospect_id: prospect.id, channel: "whatsapp",
           address: phone, is_verified: false,
+          consent_basis: "Public contact candidate from cited source; human verification required before outreach.",
+        });
+      }
+      if (email) {
+        await db.from("contact_points").insert({
+          organization_id: organizationId, prospect_id: prospect.id, channel: "email",
+          address: email, is_verified: false,
           consent_basis: "Public contact candidate from cited source; human verification required before outreach.",
         });
       }
