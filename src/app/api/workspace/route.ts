@@ -47,13 +47,15 @@ export async function GET(request: NextRequest) {
     if ("response" in auth) return auth.response;
     const { db, organizationId } = auth;
     const moduleName = request.nextUrl.searchParams.get("module") ?? "overview";
+    const requestedOffset = Number.parseInt(request.nextUrl.searchParams.get("prospect_offset") ?? "0",10);
+    const prospectOffset = moduleName === "prospects" && Number.isFinite(requestedOffset) ? Math.max(0,Math.min(1000000,requestedOffset)) : 0;
 
     const [prospectsCount, clientsCount, projectsCount, approvalsCount, prospects, clients, projects, products, approvals, finance, financialSummary, tasks] = await Promise.all([
       db.from("prospects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
       db.from("clients").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
       db.from("projects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).in("status", ["in_progress","blocked","review"]),
       db.from("approval_requests").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "pending"),
-      moduleName === "prospects" || moduleName === "overview" || moduleName === "projects" || moduleName === "tasks" || moduleName === "outreach" ? db.from("prospects").select("id,company_name,website_url,industry,country,fit_score,status,research_summary,evidence,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
+      moduleName === "prospects" || moduleName === "overview" || moduleName === "projects" || moduleName === "tasks" || moduleName === "outreach" ? db.from("prospects").select("id,company_name,website_url,industry,country,fit_score,status,research_summary,evidence,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).range(prospectOffset,prospectOffset+99) : Promise.resolve({ data: [], error: null }),
       moduleName === "clients" || moduleName === "overview" || moduleName === "projects" || moduleName === "tasks" ? db.from("clients").select("id,company_name,primary_contact_name,email,phone,industry,status,source_prospect_id,created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
       moduleName === "projects" || moduleName === "overview" || moduleName === "tasks" ? db.from("projects").select("id,project_name,status,quoted_amount_ngn,approved_amount_ngn,due_at,created_at,client_id,prospect_id").eq("organization_id", organizationId).order("updated_at", { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
       moduleName === "products" || moduleName === "overview" || moduleName === "projects" ? db.from("product_registry").select("id,product_name,product_key,dashboard_url,integration_mode,health_status,capabilities,active").eq("organization_id", organizationId).order("product_name").limit(100) : Promise.resolve({ data: [], error: null }),
@@ -82,7 +84,10 @@ export async function GET(request: NextRequest) {
         expensesNgn: expenses,
         netNgn: Number(totals?.net_ngn ?? income - expenses),
       },
-      prospects: prospects.data ?? [], clients: clients.data ?? [], projects: projects.data ?? [],
+      prospects: prospects.data ?? [],
+      prospectsHasMore: moduleName === "prospects" && (prospectOffset + (prospects.data?.length ?? 0)) < (prospectsCount.count ?? 0),
+      prospectsNextOffset: prospectOffset + (prospects.data?.length ?? 0),
+      clients: clients.data ?? [], projects: projects.data ?? [],
       products: products.data ?? [], approvals: approvals.data ?? [], finance: transactions, outreach: outreach.data ?? [], contactPoints: contactPoints.data ?? [], tasks: tasks.data ?? [],
       module: moduleName,
       canSendOutreach: ["owner", "admin"].includes(auth.role),
