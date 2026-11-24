@@ -159,7 +159,7 @@ const DIRECTORY_DOMAINS = [
   "chamberofcommerce.com","kompass.com","nigeriaprivateschools.com","schoolandcollegelistings.com",
   "africabizinfo.com","nigeriabusinessweb.com","ngpage.com","tavily.com",
 ];
-function isOfficialWebsiteResult(item: Evidence, candidate: Candidate): boolean {
+function isOfficialWebsiteResult(item: WebEvidence, candidate: Candidate): boolean {
   const host = hostOf(item.url);
   if (!host || isProfileUrl(item.url) || host.endsWith("google.com")) return false;
   if (/(^|\.)(facebook|instagram|linkedin|tiktok|twitter|youtube|x)\./i.test(host)) return false;
