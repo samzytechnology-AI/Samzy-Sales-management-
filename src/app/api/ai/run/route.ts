@@ -171,9 +171,8 @@ export async function POST(request: NextRequest) {
       if (!conversation || (conversation.scope === "personal" && conversation.created_by !== authData.user.id)) {
         return jsonError("That conversation does not belong to your account and company workspace.", 404);
       }
-      if (conversation.scope !== "company") {
-        return jsonError("The shared company AI conversation is ready. Refresh the dashboard to continue in it.", 409);
-      }
+      // Personal conversations are allowed only for their creator (checked above).
+      // Company conversations are shared with authorised organisation members.
     } else {
       const { data: sharedConversation, error: createError } = await supabase.rpc("get_or_create_company_ai_conversation", {
         p_organization_id: organizationId,
