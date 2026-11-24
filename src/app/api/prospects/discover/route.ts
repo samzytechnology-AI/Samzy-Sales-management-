@@ -28,10 +28,10 @@ const sectors = [
   "clinics, wellness centres and private healthcare businesses",
 ] as const;
 
-type Evidence = WebEvidence & { country: string; sector: string; service: string; query: string };
+type Evidence = WebEvidence & { country: string; sector: string; service: string; serviceReadiness: string; query: string };
 type Candidate = {
   companyName: string; country: string; industry: string; service: string;
-  fitScore: number | null; summary: string; evidence: Evidence[]; profileUrl: string;
+  fitScore: number | null; summary: string; evidence: Evidence[]; profileUrl: string; readiness: string;
   whatsapp: string | null; phone: string | null; email: string | null;
 };
 
@@ -145,7 +145,7 @@ function toCandidate(companyName: string, evidence: Evidence[], extra?: Record<s
     : "Public business/profile result found while researching " + profile.sector + " in " + profile.country + ". No official website was surfaced in this search batch; manually check before outreach.";
   return {
     companyName: cleanName, country: profile.country, industry: profile.sector, service,
-    fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url,
+    fitScore: fit, summary, evidence:orderedEvidence, profileUrl: profile.url, readiness:profile.serviceReadiness,
     whatsapp: contact.whatsapp, phone: contact.phone, email: extractEmail(orderedEvidence),
   };
 }
@@ -187,7 +187,7 @@ export async function POST(request: NextRequest) {
       const results = await searchBusinessWeb(task.query, tavilyKey, task.country.name);
       return results.map(item => ({
         ...item, country: task.country.name, sector: task.sector,
-        service: task.service.name, query: task.query,
+        service: task.service.name, serviceReadiness:task.service.readiness, query: task.query,
       } as Evidence));
     }));
     const successfulSearches = settled.filter(item => item.status === "fulfilled").length;
@@ -275,6 +275,7 @@ export async function POST(request: NextRequest) {
       const researchSummary = [
         "Service match: " + candidate.service + ".",
         "Search sector: " + candidate.industry + ".",
+        candidate.readiness === "active" ? "Service readiness: active offer; confirm scope and capacity." : "Service readiness: expansion opportunity only; Samuel must confirm capability before offering.",
         candidate.summary,
         "Website-first check: no official standalone website was surfaced in this search batch. This is not proof that no website exists; verify manually before outreach.",
         "Public profile: " + candidate.profileUrl,
