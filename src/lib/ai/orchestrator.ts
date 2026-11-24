@@ -54,12 +54,13 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
     const result = await synthesizer.generate({
       task: "business_advice",
       objective: [
-        "Synthesize the independent model contributions into one decision-ready answer.",
-        "Preserve the original objective. Identify agreement, meaningful disagreements, unsupported claims, missing evidence, and uncertainty.",
+        "Synthesize the independent model contributions into one clear, natural, decision-ready answer.",
+        "Keep the reply concise: target 120–180 words unless the user explicitly asks for detail. Use a short opening, up to 3 simple headings, and 3–5 short bullets where useful. Do not use tables unless the user asks for one. Do not repeat the prompt or narrate the synthesis process.",
+        "Preserve the original objective. Briefly note only material disagreements, unsupported claims, missing evidence, and uncertainty.",
         prospectTask
           ? "For prospect tasks include businessSnapshot, customerJourney, serviceFit, six weighted score dimensions with evidence, unknowns, qualification questions, a 35–65-word first message, reply scenarios and next conversion step."
           : "Return an executive decision, evidence-backed findings, risks, assumptions, recommended next actions and confidence.",
-        "Never treat majority agreement as proof. Never invent facts, citations or source URLs.",
+        "Never treat majority agreement as proof. Never invent facts, citations or source URLs. Prefer plain conversational language over lengthy executive-report formatting.",
         "For client/project/finance/operations questions distinguish quoted, approved, invoiced, outstanding and collected amounts where relevant.",
         "Only append a structured action proposal if the original user explicitly requested a supported operation and all required details are present. Never propose external message delivery, payments, contracts, final prices, deletions or irreversible actions.",
       ].join(" "),
@@ -77,8 +78,13 @@ export async function coordinateModels(request: ModelRequest, adapters: ModelAda
     synthesis = result.content;
   } catch (error) {
     warnings.push(`Synthesis pass failed: ${error instanceof Error ? error.message : "Unknown synthesis error"}`);
-    synthesis = "SYNTHESIS UNAVAILABLE — review the independent model contributions below. No unified conclusion was generated.\n\n" +
-      contributions.map((item) => `[Model ${item.slot} · ${item.provider}/${item.model}]\n${item.content}`).join("\n\n---\n\n");
+    const availableAnswer = contributions[0]?.content?.trim() ?? "";
+    const boundedAnswer = availableAnswer.length > 1_800
+      ? availableAnswer.slice(0, 1_800).replace(/\\s+\\S*$/, "") + "…"
+      : availableAnswer;
+    synthesis = boundedAnswer
+      ? "### Available answer\\n\\n" + boundedAnswer + "\\n\\n*This reply is based on one model and has not been cross-checked.*"
+      : "I couldn't produce a usable answer because the synthesis service was unavailable. Please try again shortly.";
   }
   return { objective: request.objective, contributions, synthesis, warnings, completedAt: new Date().toISOString() };
 }
