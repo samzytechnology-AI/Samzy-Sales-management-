@@ -424,23 +424,30 @@ export async function POST(request: NextRequest) {
           })),
         },
       };
-      for (const adapter of adapters) {
-        try {
-          const result = await adapter.generate(aiRequest);
-          provider = result.provider + "/" + result.model;
-          const parsed = parseJson(result.content) as any;
-          const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.prospects) ? parsed.prospects : [];
-          for (const row of rows.slice(0, 20)) {
-            if (!row || typeof row !== "object" || typeof row.companyName !== "string") continue;
-            const linkedEvidence = evidenceForUrls(row.evidenceUrls, uniqueEvidence);
-            const candidate = toCandidate(row.companyName, linkedEvidence, row);
-            if (candidate) aiCandidates.push(candidate);
-          }
-          break;
-        } catch (cause) {
-          providerFailures.push(adapter.provider + ": " + (cause instanceof Error ? cause.message : "provider error"));
+      // All five configured AI slots review the same verified search evidence in parallel.
+      const reviews = await Promise.allSettled(adapters.map(async (adapter) => {
+        const result = await adapter.generate(aiRequest);
+        const parsed = parseJson(result.content) as any;
+        const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.prospects) ? parsed.prospects : [];
+        const extracted: Candidate[] = [];
+        for (const row of rows.slice(0, 20)) {
+          if (!row || typeof row !== "object" || typeof row.companyName !== "string") continue;
+          const linkedEvidence = evidenceForUrls(row.evidenceUrls, uniqueEvidence);
+          const candidate = toCandidate(row.companyName, linkedEvidence, row);
+          if (candidate) extracted.push(candidate);
+        }
+        return { provider: result.provider + "/" + result.model, candidates: extracted };
+      }));
+      for (const review of reviews) {
+        if (review.status === "fulfilled") {
+          providerFailures.push("AI completed: " + review.value.provider);
+          aiCandidates.push(...review.value.candidates);
+        } else {
+          providerFailures.push("AI failed: " + (review.reason instanceof Error ? review.reason.message : "provider error"));
         }
       }
+      const successfulAIReviews = reviews.filter(review => review.status === "fulfilled").length;
+      provider = successfulAIReviews + "/" + adapters.length + " AI agents completed";
     }
 
     // AI improves extraction and service matching, but it is not allowed to veto every lead.
