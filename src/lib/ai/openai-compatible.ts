@@ -80,7 +80,7 @@ export function createOpenAICompatibleAdapter(config: OpenAICompatibleConfig): M
           ...(config.provider === "openrouter" ? { "HTTP-Referer": "https://samzytech.name.ng", "X-Title": "Samzy Technology AI General Manager" } : {}),
         },
         body: JSON.stringify(providerPayload),
-        signal: AbortSignal.timeout(config.provider === "gemini" ? 28_000 : 22_000),
+        signal: AbortSignal.timeout(18_000),
         cache: "no-store",
       });
 
