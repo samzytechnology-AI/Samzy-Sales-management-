@@ -195,16 +195,26 @@ export default function Home() {
   async function discoverProspects(){
     if(!token||!orgId.trim()||discoverBusy)return;
     setDiscoverBusy(true);setDiscoveryNotice("");setWorkspaceError("");
+    let savedTotal=0;let searchTotal=0;let aiCompleted=0;let aiConfigured=0;let duplicateTotal=0;let weakTotal=0;let completedBatches=0;
     try{
-      const response=await fetch("/api/prospects/discover",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},body:JSON.stringify({})});
-      const result=await response.json();
-      if(!response.ok)throw new Error(result.error??"Prospect discovery could not complete.");
-      const refreshed=await fetch("/api/workspace?module=prospects",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
-      const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Prospects were saved, but the CRM list could not refresh.");
-      setWorkspace(data);
-      const savedCount=Number(result.savedCount??0);const candidateCount=Number(result.candidateCount??0);const searches=Number(result.searchCount??0);const duplicateCount=Number(result.duplicateCount??0);const weakCount=Number(result.weakCount??0);setDiscoveryNotice(savedCount>0?`Batch ${result.batchNumber}: saved ${savedCount} new prospects. Reviewed ${candidateCount} candidates from ${searches} web searches. ${duplicateCount} duplicates and ${weakCount} weak matches skipped. ${result.totalSaved} prospects saved in total. The next batch is ready.`:`Batch ${result.batchNumber}: no new prospects qualified. Reviewed ${candidateCount} candidates from ${searches} web searches; ${duplicateCount} duplicates and ${weakCount} weak matches skipped. Search has advanced to the next batch—run it again to continue.`);
-    }catch(err){setWorkspaceError(err instanceof Error?err.message:"Prospect discovery failed.");}
-    finally{setDiscoverBusy(false);}
+      // One click runs several consecutive saved-queue batches; no need to click again after each batch.
+      for(let batch=1;batch<=4;batch++){
+        setDiscoveryNotice(`AI agents are searching for real businesses… batch ${batch} of 4. This can take a little while.`);
+        const response=await fetch("/api/prospects/discover",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},body:JSON.stringify({})});
+        const result=await response.json();
+        if(!response.ok)throw new Error(result.error??"Prospect discovery could not complete.");
+        savedTotal+=Number(result.savedCount??0);searchTotal+=Number(result.searchCount??0);aiCompleted+=Number(result.aiAgentsCompleted??0);aiConfigured=Math.max(aiConfigured,Number(result.aiAgentsConfigured??0));duplicateTotal+=Number(result.duplicateCount??0);weakTotal+=Number(result.weakCount??0);completedBatches++;
+        const refreshed=await fetch("/api/workspace?module=prospects",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
+        const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Prospects were saved, but the CRM list could not refresh.");
+        setWorkspace(data);
+        setDiscoveryNotice(`Search in progress: completed ${completedBatches} of 4 batches; ${savedTotal} new prospects saved so far. ${aiCompleted} AI reviews completed across ${searchTotal} web searches.`);
+        if(result.nextBatchReady!==true)break;
+      }
+      setDiscoveryNotice(`Search finished: ${savedTotal} new prospects saved from ${searchTotal} web searches. ${aiCompleted} AI reviews completed (${aiConfigured} configured AI agents). ${duplicateTotal} duplicates and ${weakTotal} weak matches skipped. Your next search position is saved—click Find Prospects again whenever you want another run.`);
+    }catch(err){
+      setWorkspaceError(err instanceof Error?err.message:"Prospect discovery failed.");
+      if(completedBatches>0)setDiscoveryNotice(`Search stopped after ${completedBatches} batches. ${savedTotal} new prospects were saved and remain in your CRM.`);
+    }finally{setDiscoverBusy(false);}
   }
 
   async function loadMoreProspects(){
@@ -598,7 +608,7 @@ export default function Home() {
           <div className="chat-title"><div className="chat-title-copy"><div className="eyebrow">THE COMPANY'S INTELLIGENCE PARTNER</div><h2>AI General Manager</h2><p>Samzy Technology · Private company workspace</p></div><div className="chat-title-actions"><button className="chat-menu-button" type="button" onClick={()=>setSidebarOpen(value=>!value)} aria-label="Toggle navigation">☰ Menu</button><button className="new-chat-button" type="button" onClick={()=>void startNewChat()} disabled={busy}>＋ New chat</button></div></div>
           <div className="chat-body"><div className="messages" ref={messagesContainerRef}>{messages.map(m=><article className={m.role==="user"?"message mine":"message"} key={m.id}><span className="message-avatar">{m.role==="user"?"ST":"✳"}</span><div className="message-main"><div className="message-author">{m.role==="user"?(m.actorUserId&&currentUserId&&m.actorUserId===currentUserId?"You · Samzy Technology Limited":"Company team"):"AI General Manager"}</div><div className="message-bubble">{renderMessageContent(m.content)}</div><div className="message-actions"><button type="button" aria-label="Copy message" onClick={()=>void copyMessage(m.id,m.content)}>{copiedMessageId===m.id?"✓ Copied":"▢ Copy"}</button>{m.role==="user"?<button type="button" aria-label="Edit your message" onClick={()=>editMessage(m)}>✎ Edit</button>:null}</div></div></article>)}<div ref={messagesEndRef}/>{busy?<div className="working">The company intelligence team is working…</div>:null}</div><form className="composer" onSubmit={e=>{e.preventDefault();void send();}}>{editingMessageId!==null?<div className="editing-banner"><span>Editing your message · Sending will replace it and its later replies</span><button type="button" onClick={cancelMessageEdit}>Cancel</button></div>:null}<div className="composer-input-wrap"><textarea ref={composerRef} value={draft} onChange={e=>{setDraft(e.target.value);e.currentTarget.style.height="auto";e.currentTarget.style.height=Math.min(e.currentTarget.scrollHeight,220)+"px";}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void send();}}} placeholder="Message your AI General Manager…" rows={1} aria-label="Message your AI General Manager"/></div><div className="composer-footer"><small>{busy?"AI team is analysing your request…":"Enter to send · Shift + Enter for a new line"}</small><button className="primary" disabled={busy||!draft.trim()}>{busy?<><span className="send-spinner"/> Working…</>:editingMessageId!==null?"Update & send":"Send"} <span aria-hidden="true">↑</span></button></div></form></div>
         </section>:<section className="panel module-workspace">
-          <div className="module-heading"><div><div className="eyebrow">LIVE COMPANY WORKSPACE</div><h2>{active}</h2><p>Company records are loaded from your authenticated, organisation-scoped workspace.</p></div><div className="module-heading-actions">{active==="Leads & CRM"?<button className="primary" type="button" disabled={discoverBusy||!token||!orgId.trim()} onClick={()=>void discoverProspects()}>{discoverBusy?"Searching and saving prospects…":(workspace?.summary?.prospects??0)>0?"✦ Find more prospects":"✦ Find clients everywhere"}</button>:null}{active!=="Settings"?<button className="primary" type="button" onClick={()=>setOpenForm(openForm===active?null:active)}>＋ Add {active==="Leads & CRM"?"prospect":active==="Clients"?"client":active==="Projects"?"project":active==="Tasks"?"task":active==="Product Registry"?"product":active==="Sales & Outreach"?"outreach draft":active==="Approvals"?"approval / CRM action":"ledger entry"}</button>:null}<button className="inline-action" onClick={()=>setActive("AI General Manager")}>Discuss with AI Manager ↗</button></div></div>
+          <div className="module-heading"><div><div className="eyebrow">LIVE COMPANY WORKSPACE</div><h2>{active}</h2><p>Company records are loaded from your authenticated, organisation-scoped workspace.</p></div><div className="module-heading-actions">{active==="Leads & CRM"?<button className="primary" type="button" disabled={discoverBusy||!token||!orgId.trim()} onClick={()=>void discoverProspects()}>{discoverBusy?"AI agents searching…":(workspace?.summary?.prospects??0)>0?"✦ Find more prospects":"✦ Find Prospects"}</button>:null}{active!=="Settings"?<button className="primary" type="button" onClick={()=>setOpenForm(openForm===active?null:active)}>＋ Add {active==="Leads & CRM"?"prospect":active==="Clients"?"client":active==="Projects"?"project":active==="Tasks"?"task":active==="Product Registry"?"product":active==="Sales & Outreach"?"outreach draft":active==="Approvals"?"approval / CRM action":"ledger entry"}</button>:null}<button className="inline-action" onClick={()=>setActive("AI General Manager")}>Discuss with AI Manager ↗</button></div></div>
           {workspaceError?<div className="module-alert">{workspaceError}</div>:null}{discoveryNotice?<div className="module-alert">{discoveryNotice}</div>:null}
           {workspaceBusy?<div className="empty"><b>Loading verified company records…</b></div>:null}
           {!token||!orgId.trim()?<div className="empty"><b>Connect your company workspace to view live records.</b><p>Open AI General Manager and sign in with an authorised company account.</p><button className="primary" onClick={()=>setActive("AI General Manager")}>Connect workspace ↗</button></div>:null}
@@ -620,11 +630,13 @@ export default function Home() {
                 const preparedWhatsAppMessage=[
                   `Hello ${businessName} team 👋`,
                   "",
-                  `I came across ${businessName} and noticed you’re in ${personalContext}${country?` in ${country}`:""}.`,
+                  `We came across ${businessName} and wanted to learn more about your business. It’s great to see the work you do in ${personalContext}${country?` in ${country}`:""}.`,
                   "",
-                  "I’m with Samzy Technology. We build professional, affordable websites that help businesses showcase their services and attract enquiries.",
+                  "Have you considered having a professional website where people can easily discover your business, understand your services, view your work and contact you?",
                   "",
-                  `Would you be interested in a free homepage demo designed for ${businessName}? No obligation—just a preview of what your business could look like online.`,
+                  "A well-built website can help you reach more potential customers, strengthen your presence on Google when properly indexed, build trust and make enquiries easier—so interested people have a clear place to learn about your business.",
+                  "",
+                  `Would you be open to us preparing a free homepage demo for ${businessName} so you can see how it could benefit your business? Would that interest you?`,
                   "",
                   "Samzy Technology | Bold ideas. Smart Tech. Real outcome."
                 ].join("\n");
