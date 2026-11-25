@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
     }
 
     const tavilyKey = process.env.TAVILY_API_KEY ?? "";
-    if (!tavilyKey) return jsonError("Tavily is not configured on the server. No prospects were saved.", 503);
+    if (!tavilyKey) return jsonError("Web search is unavailable on the server. No prospects were saved.", 503);
     const { data: allowed, error: limitError } = await db.rpc("consume_ai_rate_limit", {
       p_organization_id: organizationId, p_user_id: actorUserId, p_limit: 30, p_window_seconds: 3600,
     });
@@ -379,7 +379,7 @@ export async function POST(request: NextRequest) {
     if (successfulSearches === 0) {
       await db.from("prospect_discovery_state").update({ lease_until: null }).eq("organization_id", organizationId);
       lockClaimed = false;
-      return jsonError("All four web searches failed. Your saved search position was not advanced; the scheduled worker will retry on its next run.", 502);
+      return jsonError("All four web searches failed. Your saved search position was not advanced; discovery will retry after the provider is available.", 502);
     }
     const evidence = settled.flatMap(item => item.status === "fulfilled" ? item.value : []);
     const uniqueEvidence = Array.from(new Map(evidence.map(item => [item.url, item])).values()).slice(0, 40);
@@ -489,7 +489,7 @@ export async function POST(request: NextRequest) {
         organization_id:organizationId,company_name:candidate.companyName,website_url:null,
         industry:candidate.industry.slice(0,100),country:candidate.country.slice(0,80),
         fit_score:candidate.fitScore,status:"discovered",research_summary:researchSummary,
-        evidence:evidenceRows,discovered_by:"samzy_ai_tavily_agent",
+        evidence:evidenceRows,discovered_by:"samzy_ai_web_search_agent",
       }).select("id,company_name,website_url,fit_score").single();
       if (insertError || !prospect) {
         if (insertError?.code === "23505") duplicates++;
@@ -542,7 +542,7 @@ export async function POST(request: NextRequest) {
       action:"crm.prospects.ai_discovered",entity_type:"prospect",entity_id:saved[0]?.id ?? null,
       metadata:{
         saved_count:saved.length,duplicate_count:duplicates,weak_count:weak,failed_saves:failedSaves,
-        source:"Tavily",provider,searches:successfulSearches,search_errors:searchErrors,
+        source:"DuckDuckGo",provider,searches:successfulSearches,search_errors:searchErrors,
         cursor_start:startIndex,cursor_next:nextIndex,
         cycle:Math.floor(nextIndex/(countries.length*sectors.length*SAMZY_SERVICE_CATALOG.length)),
       },
