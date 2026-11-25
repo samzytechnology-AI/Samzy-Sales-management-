@@ -39,9 +39,10 @@ export async function searchBusinessWeb(
       api_key: apiKey,
       query: trimmed,
       ...(country ? { country } : {}),
-      search_depth: "advanced",
+      // Basic search uses fewer credits than advanced; keep the continuous agent economical.
+      search_depth: "basic",
       topic: "general",
-      max_results: 10,
+      max_results: 5,
       include_answer: false,
       include_raw_content: false,
     }),
@@ -66,5 +67,5 @@ export async function searchBusinessWeb(
         ...(item.published_date ? { publishedAt: item.published_date.slice(0, 80) } : {}),
       }];
     } catch { return []; }
-  }).slice(0, 10);
+  }).slice(0, 5);
 }
