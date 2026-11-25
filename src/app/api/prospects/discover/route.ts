@@ -101,6 +101,14 @@ function isProfileUrl(url: string): boolean {
     }
     if (host === "chamberofcommerce.com") return path.includes("/business-directory/") && path.split("/").filter(Boolean).length >= 3;
     if (host === "kompass.com") return path.includes("/c/") || path.includes("/company/");
+    if (host === "yell.com") return path.startsWith("/biz/");
+    if (host === "411.ca") return path.includes("/business/") || path.includes("/businesses/");
+    if (host === "truelocal.com.au") return path.includes("/business/");
+    if (host === "cybo.com") return path.includes("/business/");
+    if (host === "brownbook.net") return path.includes("/business/");
+    if (host === "cylex.com" || host.endsWith(".cylex-uk.co.uk")) return path.includes("/company/") || path.includes("/business/");
+    if (host === "infobel.com") return path.includes("/business/") || path.includes("/companies/");
+    if (/^yellowpages\\.(?:ca|co\\.uk|com\\.au|ae|co\\.za)$/.test(host)) return path.includes("/business/") || path.includes("/biz/") || path.includes("/company/");
   } catch { return false; }
   return false;
 }
@@ -134,6 +142,8 @@ function candidateKey(value: string): string {
 async function fetchProfileThumbnail(url: string): Promise<string | null> {
   if (!isProfileUrl(url)) return null;
   const host = hostOf(url);
+  // Tripadvisor is discovered only through indexed public search results; do not fetch or scrape its pages.
+  if (host === "tripadvisor.com" || host.endsWith(".tripadvisor.com")) return null;
   if (host === "google.com" || host === "maps.google.com") return null;
   try {
     const response = await fetch(url, {
@@ -155,9 +165,10 @@ async function fetchProfileThumbnail(url: string): Promise<string | null> {
 
 const DIRECTORY_DOMAINS = [
   "businesslist.com.ng","businesslist.com","mynigeriabusiness.ng","index.ng","finelib.com",
-  "yelp.com","yellowpages.com","tripadvisor.com","foursquare.com","hotfrog.com",
-  "chamberofcommerce.com","kompass.com","nigeriaprivateschools.com","schoolandcollegelistings.com",
-  "africabizinfo.com","nigeriabusinessweb.com","ngpage.com","tavily.com",
+  "yelp.com","yellowpages.com","yellowpages.ca","yellowpages.co.uk","yellowpages.com.au","yellowpages.ae","yellowpages.co.za",
+  "tripadvisor.com","foursquare.com","hotfrog.com","chamberofcommerce.com","kompass.com",
+  "yell.com","411.ca","truelocal.com.au","cybo.com","brownbook.net","cylex.com","cylex-uk.co.uk","infobel.com",
+  "nigeriaprivateschools.com","schoolandcollegelistings.com","africabizinfo.com","nigeriabusinessweb.com","ngpage.com","tavily.com",
 ];
 function isOfficialWebsiteResult(item: WebEvidence, candidate: Candidate): boolean {
   const host = hostOf(item.url);
@@ -231,17 +242,21 @@ function taskAt(index: number) {
     "site:finelib.com individual business listings",
   ];
   const internationalSources = [
-    "site:google.com/maps/place individual Google Maps place profiles",
-    "site:yelp.com/biz individual Yelp business profiles",
-    "site:yellowpages.com individual Yellow Pages business listings",
-    "site:tripadvisor.com/Restaurant_Review OR site:tripadvisor.com/Hotel_Review individual business profiles",
+    "site:google.com/maps/place individual Google Maps place profiles with public phone numbers",
+    "site:yelp.com/biz individual Yelp business profiles with contact details",
+    "site:yellowpages.com OR site:yellowpages.ca OR site:yellowpages.co.uk OR site:yellowpages.com.au OR site:yellowpages.ae OR site:yellowpages.co.za individual Yellow Pages business listings",
+    "site:tripadvisor.com/Restaurant_Review OR site:tripadvisor.com/Hotel_Review individual public business profiles and indexed contact details",
+    "site:foursquare.com/v OR site:hotfrog.com/company OR site:hotfrog.com/business individual business listings",
+    "site:yell.com/biz OR site:411.ca/business OR site:truelocal.com.au/business individual business listings",
+    "site:cybo.com/business OR site:brownbook.net/business OR site:cylex.com/company OR site:infobel.com individual business profiles",
+    "site:chamberofcommerce.com/business-directory OR site:kompass.com/c individual company profiles",
   ];
   const sourceGuide = country.name === "Nigeria"
     ? nigeriaSources[index % nigeriaSources.length]
     : internationalSources[index % internationalSources.length];
   const query = "Find named, real " + variation + " " + sector + " in " + country.name + ". "
     + sourceGuide
-    + " We are looking for operating businesses in this sector as potential customers, not suppliers. Return individual business profile pages with a clear business name and evidence such as address, opening hours, phone, reviews, admissions, products, or services. Prefer businesses without an official standalone website. Exclude software vendors, app developers, web design or marketing agencies, directory operators, generic category pages, articles, how-to guides, job pages, social media pages, Facebook groups/posts, and Instagram profiles. ";
+    + " We are looking for operating businesses in this sector as potential customers, not suppliers. Return individual business profile pages with a clear business name and publicly indexed phone number, address, opening hours, reviews, admissions, products, or services. Prefer businesses without an official standalone website. Do not access or scrape directory pages; use only public search-engine result titles and snippets as discovery evidence. Exclude software vendors, app developers, web design or marketing agencies, directory operators, generic category pages, articles, how-to guides, job pages, social media pages, Facebook groups/posts, and Instagram profiles. ";
   return { country, sector, service, query: query.slice(0, 590), cycle };
 }
 function evidenceForUrls(urls: unknown, all: Evidence[]): Evidence[] {
