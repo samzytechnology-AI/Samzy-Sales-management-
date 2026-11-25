@@ -403,6 +403,8 @@ export async function POST(request: NextRequest) {
     let provider = "deterministic evidence extraction";
     const aiCandidates: Candidate[] = [];
     const providerFailures: string[] = [];
+    let aiAgentsCompleted = 0;
+    const aiAgentsConfigured = adapters.length;
     if (uniqueEvidence.length && adapters.length) {
       const aiRequest: ModelRequest = {
         task: "prospect_discovery",
@@ -446,8 +448,8 @@ export async function POST(request: NextRequest) {
           providerFailures.push("AI failed: " + (review.reason instanceof Error ? review.reason.message : "provider error"));
         }
       }
-      const successfulAIReviews = reviews.filter(review => review.status === "fulfilled").length;
-      provider = successfulAIReviews + "/" + adapters.length + " AI agents completed";
+      aiAgentsCompleted = reviews.filter(review => review.status === "fulfilled").length;
+      provider = aiAgentsCompleted + "/" + adapters.length + " AI agents completed";
     }
 
     // AI improves extraction and service matching, but it is not allowed to veto every lead.
@@ -575,7 +577,7 @@ export async function POST(request: NextRequest) {
       candidateCount:candidates.length,searchResultCount:uniqueEvidence.length,
       profileResultCount:uniqueEvidence.filter(item=>isProfileUrl(item.url)).length,websiteCheckCount:websiteCheckResults.length,websiteCheckFailed:websiteChecks.filter(check=>Boolean(check.error)).length,websiteCheckSample:websiteCheckResults.slice(0,12).map(item=>({title:item.title,url:item.url,host:hostOf(item.url)})),
       searchResultSample:uniqueEvidence.slice(0,18).map(item=>({title:item.title,url:item.url,host:hostOf(item.url)})),
-      searchCount:successfulSearches,searchErrors,provider,
+      searchCount:successfulSearches,searchErrors,provider,aiAgentsCompleted,aiAgentsConfigured,
       searchedCountries:Array.from(new Set(batch.map(task=>task.country.name))),
       searchedServices:Array.from(new Set(batch.map(task=>task.service.name))),
       batchNumber:Math.floor(startIndex/BATCH_SIZE)+1,nextBatchReady:true,nextTaskIndex:nextIndex,
