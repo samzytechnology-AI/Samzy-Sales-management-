@@ -62,7 +62,6 @@ export async function searchBusinessWeb(
     throw new Error("DuckDuckGo returned a bot challenge instead of search results.");
   }
   const results: WebEvidence[] = [];
-  const blocks = html.match(/<div[^>]*class=["'][^"']*result[^"']*["'][^>]*>[\s\S]*?<\/div>\s*(?=<div[^>]*class=["'][^"']*result|$)/gi) ?? [];
   // Result anchors/snippets are parsed independently to tolerate DDG markup changes.
   const anchors = [...html.matchAll(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
   for (const anchor of anchors) {
