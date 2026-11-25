@@ -620,17 +620,13 @@ export default function Home() {
                 const preparedWhatsAppMessage=[
                   `Hello ${businessName} team 👋`,
                   "",
-                  `I came across ${businessName} while researching ${personalContext}${country?` businesses in ${country}`:" businesses"} and wanted to reach out personally.`,
+                  `I came across ${businessName} and noticed you’re in ${personalContext}${country?` in ${country}`:""}.`,
                   "",
-                  "I’m contacting you from Samzy Technology. We help businesses present what they offer clearly online and make it easier for interested customers to enquire.",
+                  "I’m with Samzy Technology. We build professional, affordable websites that help businesses showcase their services and attract enquiries.",
                   "",
-                  `I’d love to create a free, no-obligation website demo for ${businessName}—a simple preview tailored to your business, so you can see how your services could be presented professionally and how customers could contact you.`,
+                  `Would you be interested in a free homepage demo designed for ${businessName}? No obligation—just a preview of what your business could look like online.`,
                   "",
-                  "If you like the demo, we can discuss an affordable way to take it live. Would you be open to seeing a preview?",
-                  "",
-                  "Thank you,",
-                  "Samzy Technology",
-                  "Bold ideas. Smart Tech. Real outcome."
+                  "Samzy Technology | Bold ideas. Smart Tech. Real outcome."
                 ].join("\n");
                 const whatsappHref=`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(preparedWhatsAppMessage)}`;
                 const thumbnailUrl=(item.evidence??[]).find((source:any)=>typeof source?.thumbnailUrl==="string")?.thumbnailUrl as string|undefined;
