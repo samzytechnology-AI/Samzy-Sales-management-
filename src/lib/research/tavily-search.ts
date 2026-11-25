@@ -50,7 +50,7 @@ export async function searchBusinessWeb(
       Accept: "text/html,application/xhtml+xml",
       "User-Agent": "Mozilla/5.0 (compatible; SamzyProspectDiscovery/1.0; +https://samzytech.name.ng)",
     },
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(15_000),
     cache: "no-store",
   });
   if (!response.ok) {
