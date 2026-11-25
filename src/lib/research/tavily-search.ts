@@ -13,6 +13,16 @@ interface TavilyResult {
 }
 interface TavilyResponse { results?: TavilyResult[]; }
 
+function safeProviderMessage(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { message?: unknown; detail?: unknown; error?: unknown };
+    const value = [parsed.message, parsed.detail, parsed.error]
+      .find((item) => typeof item === "string" && item.trim());
+    if (typeof value === "string") return value.replace(/tvly-[A-Za-z0-9_-]+/g, "[redacted-key]").slice(0, 300);
+  } catch { /* non-JSON provider error */ }
+  return body.replace(/tvly-[A-Za-z0-9_-]+/g, "[redacted-key]").replace(/\s+/g, " ").trim().slice(0, 300);
+}
+
 export async function searchBusinessWeb(
   query: string,
   apiKey: string,
@@ -38,7 +48,11 @@ export async function searchBusinessWeb(
     signal: AbortSignal.timeout(20_000),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Tavily search provider returned HTTP ${response.status}.`);
+  if (!response.ok) {
+    const detail = safeProviderMessage(await response.text());
+    console.error("[tavily-search] provider rejected request", { status: response.status, detail });
+    throw new Error(`Tavily HTTP ${response.status}: ${detail || "provider returned no error detail"}`);
+  }
   const payload = await response.json() as TavilyResponse;
   return (payload.results ?? []).flatMap((item) => {
     if (!item.url || !item.title) return [];
