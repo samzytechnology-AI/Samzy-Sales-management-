@@ -631,7 +631,7 @@ export default function Home() {
                   "Thank you,",
                   "Samzy Technology",
                   "Bold ideas. Smart Tech. Real outcome."
-                ].join("\\n");
+                ].join("\n");
                 const whatsappHref=`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(preparedWhatsAppMessage)}`;
                 const thumbnailUrl=(item.evidence??[]).find((source:any)=>typeof source?.thumbnailUrl==="string")?.thumbnailUrl as string|undefined;
                 return <article className="prospect-card" key={item.id}>
