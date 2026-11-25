@@ -5,67 +5,82 @@ export interface WebEvidence {
   publishedAt?: string;
 }
 
-interface TavilyResult {
-  url?: string;
-  title?: string;
-  content?: string;
-  published_date?: string;
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([\da-f]+);/gi, (_, n: string) => String.fromCodePoint(parseInt(n, 16)));
 }
-interface TavilyResponse { results?: TavilyResult[]; }
 
-function safeProviderMessage(body: string): string {
+function cleanText(value: string): string {
+  return decodeHtml(value.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+function resolveResultUrl(raw: string): string | null {
   try {
-    const parsed = JSON.parse(body) as { message?: unknown; detail?: unknown; error?: unknown };
-    const value = [parsed.message, parsed.detail, parsed.error]
-      .find((item) => typeof item === "string" && item.trim());
-    if (typeof value === "string") return value.replace(/tvly-[A-Za-z0-9_-]+/g, "[redacted-key]").slice(0, 300);
-  } catch { /* non-JSON provider error */ }
-  return body.replace(/tvly-[A-Za-z0-9_-]+/g, "[redacted-key]").replace(/\s+/g, " ").trim().slice(0, 300);
+    const url = new URL(decodeHtml(raw), "https://html.duckduckgo.com");
+    if (url.hostname.endsWith("duckduckgo.com") && url.pathname === "/l/") {
+      const destination = url.searchParams.get("uddg");
+      if (!destination) return null;
+      return new URL(destination).toString();
+    }
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    return url.toString();
+  } catch { return null; }
 }
 
+/**
+ * No-key web search fallback. Uses DuckDuckGo's public HTML results page;
+ * no Tavily credentials or usage quota are required.
+ */
 export async function searchBusinessWeb(
   query: string,
-  apiKey: string,
-  country?: string,
+  _unusedApiKey?: string,
+  _country?: string,
   fetcher: typeof fetch = fetch,
 ): Promise<WebEvidence[]> {
   const trimmed = query.trim();
   if (!trimmed || trimmed.length > 600) throw new Error("Search query must contain 1–600 characters.");
-  if (!apiKey.trim()) throw new Error("Tavily API key is missing.");
-  const response = await fetcher("https://api.tavily.com/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      api_key: apiKey,
-      query: trimmed,
-      ...(country ? { country } : {}),
-      // Basic search uses fewer credits than advanced; keep the continuous agent economical.
-      search_depth: "basic",
-      topic: "general",
-      max_results: 5,
-      include_answer: false,
-      include_raw_content: false,
-    }),
+  const searchUrl = new URL("https://html.duckduckgo.com/html/");
+  searchUrl.searchParams.set("q", trimmed);
+  const response = await fetcher(searchUrl.toString(), {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml",
+      "User-Agent": "Mozilla/5.0 (compatible; SamzyProspectDiscovery/1.0; +https://samzytech.name.ng)",
+    },
     signal: AbortSignal.timeout(20_000),
     cache: "no-store",
   });
   if (!response.ok) {
-    const detail = safeProviderMessage(await response.text());
-    console.error("[tavily-search] provider rejected request", { status: response.status, detail });
-    throw new Error(`Tavily HTTP ${response.status}: ${detail || "provider returned no error detail"}`);
+    console.error("[web-search] DuckDuckGo rejected request", { status: response.status });
+    throw new Error(`Web search HTTP ${response.status}`);
   }
-  const payload = await response.json() as TavilyResponse;
-  return (payload.results ?? []).flatMap((item) => {
-    if (!item.url || !item.title) return [];
-    try {
-      const parsed = new URL(item.url);
-      if (!["https:", "http:"].includes(parsed.protocol)) return [];
-      return [{
-        url: parsed.toString(),
-        title: item.title.slice(0, 300),
-        ...(item.content ? { excerpt: item.content.slice(0, 2_000) } : {}),
-        ...(item.published_date ? { publishedAt: item.published_date.slice(0, 80) } : {}),
-      }];
-    } catch { return []; }
-  }).slice(0, 5);
+  const html = await response.text();
+  if (/anomaly|captcha|bot challenge|unusual traffic/i.test(html) && !/result__a/.test(html)) {
+    throw new Error("DuckDuckGo returned a bot challenge instead of search results.");
+  }
+  const results: WebEvidence[] = [];
+  const blocks = html.match(/<div[^>]*class=["'][^"']*result[^"']*["'][^>]*>[\s\S]*?<\/div>\s*(?=<div[^>]*class=["'][^"']*result|$)/gi) ?? [];
+  // Result anchors/snippets are parsed independently to tolerate DDG markup changes.
+  const anchors = [...html.matchAll(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+  for (const anchor of anchors) {
+    const url = resolveResultUrl(anchor[1]);
+    const title = cleanText(anchor[2]);
+    if (!url || !title) continue;
+    const start = anchor.index ?? 0;
+    const tail = html.slice(start, start + 5000);
+    const snippetMatch = tail.match(/class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\//i);
+    const excerpt = snippetMatch ? cleanText(snippetMatch[1]) : "";
+    if (results.some((item) => item.url === url)) continue;
+    results.push({ url, title: title.slice(0, 300), ...(excerpt ? { excerpt: excerpt.slice(0, 2000) } : {}) });
+    if (results.length >= 10) break;
+  }
+  if (!results.length) {
+    console.warn("[web-search] DuckDuckGo returned no parseable results", { responseBytes: html.length });
+    throw new Error("Web search returned no parseable business results.");
+  }
+  console.info("[web-search] search succeeded", { provider: "DuckDuckGo HTML", resultCount: results.length });
+  return results;
 }
