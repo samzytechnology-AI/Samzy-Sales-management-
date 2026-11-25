@@ -613,6 +613,26 @@ export default function Home() {
                 const prefix=prefixes[String(item.country??"")]??"";
                 const whatsappNumber=rawPhone?(rawPhone.startsWith(prefix)&&prefix?rawPhone:rawPhone.startsWith("0")&&prefix?prefix+rawPhone.slice(1):prefix&&rawPhone.length<=10?prefix+rawPhone:rawPhone):"";
                 const description=String(item.research_summary??item.industry??"").split("\n")[0].trim().slice(0,170);
+                const businessName=String(item.company_name??"your business").trim();
+                const industry=String(item.industry??"your industry").trim();
+                const country=String(item.country??"").trim();
+                const personalContext=industry && industry.toLowerCase()!=="other" ? industry : "your business";
+                const preparedWhatsAppMessage=[
+                  `Hello ${businessName} team 👋`,
+                  "",
+                  `I came across ${businessName} while researching ${personalContext}${country?` businesses in ${country}`:" businesses"} and wanted to reach out personally.`,
+                  "",
+                  "I’m contacting you from Samzy Technology. We help businesses present what they offer clearly online and make it easier for interested customers to enquire.",
+                  "",
+                  `I’d love to create a free, no-obligation website demo for ${businessName}—a simple preview tailored to your business, so you can see how your services could be presented professionally and how customers could contact you.`,
+                  "",
+                  "If you like the demo, we can discuss an affordable way to take it live. Would you be open to seeing a preview?",
+                  "",
+                  "Thank you,",
+                  "Samzy Technology",
+                  "Bold ideas. Smart Tech. Real outcome."
+                ].join("\\n");
+                const whatsappHref=`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(preparedWhatsAppMessage)}`;
                 const thumbnailUrl=(item.evidence??[]).find((source:any)=>typeof source?.thumbnailUrl==="string")?.thumbnailUrl as string|undefined;
                 return <article className="prospect-card" key={item.id}>
                   <div className="prospect-thumbnail" aria-hidden="true"><span>{String(item.company_name??"B").trim().charAt(0).toUpperCase()}</span>{thumbnailUrl?<img src={thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none";}}/>:null}</div>
@@ -621,7 +641,7 @@ export default function Home() {
                     <p>{description||"Business prospect"}</p>
                     <div className="prospect-actions">
                       {profileUrl?<a href={profileUrl} target="_blank" rel="noreferrer">View Profile ↗</a>:null}
-                      {whatsappNumber.length>=10?<a className="prospect-whatsapp" href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noreferrer">WhatsApp ↗</a>:null}
+                      {whatsappNumber.length>=10?<a className="prospect-whatsapp" href={whatsappHref} target="_blank" rel="noreferrer" aria-label={`Open a prepared personalised WhatsApp introduction to ${businessName}`} title="Open a personalised first message in WhatsApp">Message on WhatsApp ↗</a>:null}
                     </div>
                   </div>
                 </article>;
