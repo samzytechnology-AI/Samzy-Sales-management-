@@ -343,8 +343,8 @@ export async function POST(request: NextRequest) {
       actorUserId = authData.user.id;
     }
 
-    const tavilyKey = process.env.TAVILY_API_KEY ?? "";
-    if (!tavilyKey) return jsonError("Web search is unavailable on the server. No prospects were saved.", 503);
+    const tavilyKey = ""; // No-key DuckDuckGo provider; legacy adapter argument is ignored.
+    
     const { data: allowed, error: limitError } = await db.rpc("consume_ai_rate_limit", {
       p_organization_id: organizationId, p_user_id: actorUserId, p_limit: 30, p_window_seconds: 3600,
     });
