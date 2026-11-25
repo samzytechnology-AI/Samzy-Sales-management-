@@ -30,7 +30,7 @@ export function createAnthropicAdapter(config: OpenAICompatibleConfig): ModelAda
           ].join("\n\n"),
           messages: [{ role: "user", content: buildPrompt(request) }],
         }),
-        signal: AbortSignal.timeout(22_000),
+        signal: AbortSignal.timeout(18_000),
         cache: "no-store",
       });
       if (!response.ok) {
