@@ -198,8 +198,8 @@ export default function Home() {
     let savedTotal=0;let searchTotal=0;let aiCompleted=0;let aiConfigured=0;let duplicateTotal=0;let weakTotal=0;let completedBatches=0;
     try{
       // One click runs several consecutive saved-queue batches; no need to click again after each batch.
-      for(let batch=1;batch<=4;batch++){
-        setDiscoveryNotice(`AI agents are searching for real businesses… batch ${batch} of 4. This can take a little while.`);
+      for(let batch=1;batch<=8;batch++){
+        setDiscoveryNotice(`AI agents are searching for real businesses… batch ${batch} of up to 8. This can take a little while.`);
         const response=await fetch("/api/prospects/discover",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},body:JSON.stringify({})});
         const result=await response.json();
         if(!response.ok)throw new Error(result.error??"Prospect discovery could not complete.");
@@ -207,10 +207,10 @@ export default function Home() {
         const refreshed=await fetch("/api/workspace?module=prospects",{headers:{Authorization:"Bearer "+token,"x-organization-id":orgId.trim()},cache:"no-store"});
         const data=await refreshed.json();if(!refreshed.ok)throw new Error(data.error??"Prospects were saved, but the CRM list could not refresh.");
         setWorkspace(data);
-        setDiscoveryNotice(`Search in progress: completed ${completedBatches} of 4 batches; ${savedTotal} new prospects saved so far. ${aiCompleted} AI reviews completed across ${searchTotal} web searches.`);
-        if(result.nextBatchReady!==true)break;
+        setDiscoveryNotice(`Search in progress: completed ${completedBatches} batches; ${savedTotal} new prospects saved so far. ${aiCompleted} AI reviews completed across ${searchTotal} web searches.`);
+        if(result.nextBatchReady!==true||savedTotal>=12)break;
       }
-      setDiscoveryNotice(`Search finished: ${savedTotal} new prospects saved from ${searchTotal} web searches. ${aiCompleted} AI reviews completed (${aiConfigured} configured AI agents). ${duplicateTotal} duplicates and ${weakTotal} weak matches skipped. Your next search position is saved—click Find Prospects again whenever you want another run.`);
+      setDiscoveryNotice(`Search finished after ${completedBatches} batches: ${savedTotal} new prospects saved from ${searchTotal} web searches. ${aiCompleted} AI reviews completed (${aiConfigured} configured AI agents). ${duplicateTotal} duplicates and ${weakTotal} weak matches skipped. Your next search position is saved—click Find Prospects again whenever you want another run.`);
     }catch(err){
       setWorkspaceError(err instanceof Error?err.message:"Prospect discovery failed.");
       if(completedBatches>0)setDiscoveryNotice(`Search stopped after ${completedBatches} batches. ${savedTotal} new prospects were saved and remain in your CRM.`);
